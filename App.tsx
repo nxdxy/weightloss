@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import type { UserInfo, DailyLogEntry, StoredAnalysisReport } from './types';
+import type { UserInfo, DailyLogEntry, StoredAnalysisReport, MealLog } from './types';
 import { Page } from './types';
 import { UserIcon, ChatIcon, TableIcon, ChartIcon, MenuIcon, XIcon, SettingsIcon, BookOpenIcon } from './components/Icons';
 import { UserInfoForm } from './components/UserInfo';
@@ -52,6 +51,21 @@ const App: React.FC = () => {
                     return parsed.map((log: any): DailyLogEntry | null => {
                         if (typeof log !== 'object' || log === null || !log.date) return null;
                         
+                        // Function to ensure meal data is in the new MealLog format for backward compatibility
+                        const ensureMealLog = (mealData: any): MealLog => {
+                            if (typeof mealData === 'string') {
+                                return { text: mealData, image: undefined, analysis: undefined };
+                            }
+                            if (typeof mealData === 'object' && mealData !== null && typeof mealData.text === 'string') {
+                                return { 
+                                    text: mealData.text, 
+                                    image: mealData.image || undefined,
+                                    analysis: mealData.analysis || undefined,
+                                };
+                            }
+                            return { text: '', image: undefined, analysis: undefined };
+                        };
+
                         // Sanitize and ensure correct types
                         const safeLog: DailyLogEntry = {
                             id: log.id || crypto.randomUUID(),
@@ -68,9 +82,9 @@ const App: React.FC = () => {
                             proteinG: log.proteinG && !isNaN(Number(log.proteinG)) ? Number(log.proteinG) : null,
                             carbsG: log.carbsG && !isNaN(Number(log.carbsG)) ? Number(log.carbsG) : null,
                             fatG: log.fatG && !isNaN(Number(log.fatG)) ? Number(log.fatG) : null,
-                            breakfast: log.breakfast || '',
-                            lunch: log.lunch || '',
-                            dinner: log.dinner || '',
+                            breakfast: ensureMealLog(log.breakfast),
+                            lunch: ensureMealLog(log.lunch),
+                            dinner: ensureMealLog(log.dinner),
                             activity: log.activity || '',
                             summary: log.summary || log.notes || '', // Backwards compatibility for 'notes'
                         };
@@ -96,7 +110,15 @@ const App: React.FC = () => {
     }, [userInfo]);
 
     useEffect(() => {
-        localStorage.setItem('dailyLogs', JSON.stringify(logs));
+        // WARNING: Storing full-resolution images in localStorage can quickly
+        // exceed browser storage limits (typically 5-10MB), which may cause
+        // the application to crash or fail to save data.
+        try {
+            localStorage.setItem('dailyLogs', JSON.stringify(logs));
+        } catch (error) {
+            console.error("Could not save logs to localStorage. This is likely due to storage limits being exceeded.", error);
+            alert("警告：无法将日志保存到您的浏览器。存储空间可能已满。这可能导致应用崩溃或数据丢失。请考虑定期清理旧的记录。");
+        }
     }, [logs]);
 
     useEffect(() => {

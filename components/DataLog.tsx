@@ -1,9 +1,10 @@
 
-import React, { useState, useRef, useMemo } from 'react';
-import type { DailyLogEntry, AnalyzedMealData, FullDayAnalysisData, UserInfo, Page } from '../types';
-import { UploadIcon, SparklesIcon, CameraIcon, UserIcon, XIcon } from './Icons';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import type { DailyLogEntry, AnalyzedMealData, FullDayAnalysisData, UserInfo, Page, MealLog } from '../types';
+import { UploadIcon, SparklesIcon, CameraIcon, UserIcon, XIcon, TrashIcon, CheckIcon } from './Icons';
 import { analyzeMealInput, analyzeFullDayNutrition } from '../services/geminiService';
 import { Page as PageEnum } from '../types';
+import { AnalysisDetailModal } from './AnalysisDetailModal';
 
 interface DataLogProps {
   logs: DailyLogEntry[];
@@ -32,14 +33,14 @@ const EditableCell: React.FC<{ value: string | number | null; onSave: (value: st
         }
     };
     
-    React.useEffect(() => {
+    useEffect(() => {
         if (editing && inputRef.current) {
             inputRef.current.focus();
             inputRef.current.select();
         }
     }, [editing]);
 
-    React.useEffect(() => {
+    useEffect(() => {
         setCurrentValue(value);
     }, [value]);
 
@@ -61,10 +62,46 @@ const EditableCell: React.FC<{ value: string | number | null; onSave: (value: st
     const isEmpty = value === null || value === undefined || value === '';
 
     return (
-        <div onClick={() => setEditing(true)} className={`w-full h-full cursor-pointer p-2 whitespace-pre-wrap min-h-[3.5rem] flex items-center justify-${align === 'center' ? 'center' : align === 'right' ? 'end' : 'start'}`}>
+        <div onClick={() => setEditing(true)} className={`w-full h-full cursor-pointer whitespace-pre-wrap flex items-center justify-${align === 'center' ? 'center' : align === 'right' ? 'end' : 'start'}`}>
             {isEmpty
                 ? <span className="text-gray-400 dark:text-gray-600 italic">空</span> 
                 : String(value)}
+        </div>
+    );
+};
+
+
+const MealCell: React.FC<{
+    meal: MealLog;
+    onTextSave: (text: string) => void;
+    onCardClick: () => void;
+}> = ({ meal, onTextSave, onCardClick }) => {
+    const hasAnalysis = meal.analysis && Object.keys(meal.analysis).length > 0;
+    return (
+        <div 
+            className="bg-white dark:bg-gray-800/50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden min-w-[200px] max-w-xs cursor-pointer hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all duration-200"
+            onClick={onCardClick}
+        >
+            {meal.image ? (
+                 <div className="aspect-video w-full bg-gray-100 dark:bg-gray-700 relative">
+                    <img 
+                        src={meal.image} 
+                        alt="Meal photo" 
+                        className="w-full h-full object-cover" 
+                    />
+                    {hasAnalysis && (
+                         <div className="absolute bottom-1 right-1 bg-indigo-500 text-white text-xs px-2 py-0.5 rounded-full flex items-center shadow">
+                            <SparklesIcon className="w-3 h-3 mr-1" />
+                            <span>详细分析</span>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="h-4 bg-gray-50 dark:bg-gray-800"></div>
+            )}
+            <div className={`p-2 text-left`}>
+                <EditableCell value={meal.text} onSave={onTextSave} align="left" />
+            </div>
         </div>
     );
 };
@@ -102,7 +139,7 @@ const parseCsvRow = (row: string): string[] => {
     return result;
 };
 
-const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, date: string, mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void; onApiKeyMissing: () => void; }> = ({ onMealLogged, onApiKeyMissing }) => {
+const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, imagePreview: string | null, date: string, mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void; onApiKeyMissing: () => void; }> = ({ onMealLogged, onApiKeyMissing }) => {
     const [userInput, setUserInput] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [image, setImage] = useState<File | null>(null);
@@ -140,7 +177,7 @@ const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, date: str
             const mealTypeLabels = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '点心' };
             const result = await analyzeMealInput(userInput, image, mealTypeLabels[selectedMealType]);
             if (result) {
-                onMealLogged(result, selectedDate, selectedMealType);
+                onMealLogged(result, imagePreview, selectedDate, selectedMealType);
                 setUserInput('');
                 removeImage();
             } else {
@@ -328,8 +365,22 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
   const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+  const [modalMeal, setModalMeal] = useState<MealLog | null>(null);
 
   const isProfileComplete = userInfo.age && userInfo.gender && userInfo.height;
+  
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+       if (event.key === 'Escape') {
+        setModalMeal(null);
+       }
+    };
+    window.addEventListener('keydown', handleEsc);
+
+    return () => {
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
 
   const calculatedColumns: (keyof DailyLogEntry)[] = ['bmr', 'tdee', 'estimatedExpenditure', 'actualIntake', 'proteinG', 'carbsG', 'fatG', 'calorieDeficit'];
 
@@ -362,65 +413,88 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
     });
   }, [logs]);
   
-  const handleMealLogged = (data: AnalyzedMealData, dateStr: string, mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
-      const targetDate = parseDateStringToLocal(dateStr);
-      if (!targetDate) {
-          alert("提供的日期无效，无法记录膳食。");
-          return;
-      }
-  
-      setLogs(prevLogs => {
-          let logsCopy = [...prevLogs];
-          const existingLogIndex = logsCopy.findIndex(log => isSameDay(parseDateStringToLocal(log.date), targetDate));
-  
-          const mealDetails = `${data.generatedMealName} (~${Math.round(data.estimatedCalories)} kcal)`;
-  
-          if (existingLogIndex > -1) {
-              // --- Update existing log ---
-              const existingLog = { ...logsCopy[existingLogIndex] };
-  
-              const updatedLog: DailyLogEntry = {
-                  ...existingLog,
-                  actualIntake: (existingLog.actualIntake || 0) + data.estimatedCalories,
-                  proteinG: (existingLog.proteinG || 0) + data.estimatedProteinG,
-                  carbsG: (existingLog.carbsG || 0) + data.estimatedCarbsG,
-                  fatG: (existingLog.fatG || 0) + data.estimatedFatG,
-              };
-  
-              if (mealType !== 'snack') {
-                  const existingContent = updatedLog[mealType];
-                  updatedLog[mealType] = existingContent && existingContent.trim() !== '' ? `${existingContent}\n${mealDetails}` : mealDetails;
-              } else {
-                  const snackNote = `[点心] ${mealDetails}`;
-                  updatedLog.summary = updatedLog.summary && updatedLog.summary.trim() !== '' ? `${updatedLog.summary}\n${snackNote}` : snackNote;
-              }
-              
-              logsCopy[existingLogIndex] = updatedLog;
-          } else {
-              // --- Create new log ---
-              const newLog: DailyLogEntry = {
-                  id: crypto.randomUUID(),
-                  date: dateStr,
-                  weightKg: null, waistCm: null, waterL: null, sleepH: null,
-                  breakfast: '', lunch: '', dinner: '', activity: '',
-                  bmr: null,
-                  tdee: null,
-                  estimatedExpenditure: null,
-                  actualIntake: data.estimatedCalories,
-                  proteinG: data.estimatedProteinG,
-                  carbsG: data.estimatedCarbsG,
-                  fatG: data.estimatedFatG,
-                  calorieDeficit: null,
-                  summary: mealType === 'snack' ? `[点心] ${mealDetails}` : ''
-              };
-              if (mealType !== 'snack') {
-                 newLog[mealType] = mealDetails;
-              }
-              logsCopy = [newLog, ...logsCopy];
-          }
-          return processAllLogs(logsCopy, userInfo);
-      });
-  };
+  const handleMealLogged = (data: AnalyzedMealData, imagePreview: string | null, dateStr: string, mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
+    const targetDate = parseDateStringToLocal(dateStr);
+    if (!targetDate) {
+        alert("提供的日期无效，无法记录膳食。");
+        return;
+    }
+
+    setLogs(prevLogs => {
+        let logsCopy = [...prevLogs];
+        const existingLogIndex = logsCopy.findIndex(log => isSameDay(parseDateStringToLocal(log.date), targetDate));
+
+        const newMealData: MealLog = {
+            text: `${data.generatedMealName} (~${Math.round(data.estimatedCalories)} kcal)`,
+            image: imagePreview,
+            analysis: data
+        };
+
+        if (mealType === 'snack') {
+            // Handle snack: add to summary and macros, but don't replace a meal slot.
+            if (existingLogIndex > -1) {
+                const updatedLog = { ...logsCopy[existingLogIndex] };
+                const snackNote = `[点心] ${newMealData.text}`;
+                updatedLog.summary = updatedLog.summary && updatedLog.summary.trim() !== '' ? `${updatedLog.summary}\n${snackNote}` : snackNote;
+                updatedLog.actualIntake = (updatedLog.actualIntake || 0) + data.estimatedCalories;
+                updatedLog.proteinG = (updatedLog.proteinG || 0) + data.estimatedProteinG;
+                updatedLog.carbsG = (updatedLog.carbsG || 0) + data.estimatedCarbsG;
+                updatedLog.fatG = (updatedLog.fatG || 0) + data.estimatedFatG;
+                logsCopy[existingLogIndex] = updatedLog;
+            } else {
+                 const newLog = createNewLogEntry(dateStr);
+                 const snackNote = `[点心] ${newMealData.text}`;
+                 newLog.summary = snackNote;
+                 newLog.actualIntake = data.estimatedCalories;
+                 newLog.proteinG = data.estimatedProteinG;
+                 newLog.carbsG = data.estimatedCarbsG;
+                 newLog.fatG = data.estimatedFatG;
+                 logsCopy = [newLog, ...logsCopy];
+            }
+        } else {
+            // Handle breakfast, lunch, dinner: Overwrite the meal slot and adjust totals.
+            if (existingLogIndex > -1) {
+                const updatedLog = { ...logsCopy[existingLogIndex] };
+                const oldMeal = updatedLog[mealType];
+                const oldCalories = oldMeal?.analysis?.estimatedCalories || 0;
+                const oldProtein = oldMeal?.analysis?.estimatedProteinG || 0;
+                const oldCarbs = oldMeal?.analysis?.estimatedCarbsG || 0;
+                const oldFat = oldMeal?.analysis?.estimatedFatG || 0;
+
+                updatedLog.actualIntake = (updatedLog.actualIntake || 0) - oldCalories + data.estimatedCalories;
+                updatedLog.proteinG = (updatedLog.proteinG || 0) - oldProtein + data.estimatedProteinG;
+                updatedLog.carbsG = (updatedLog.carbsG || 0) - oldCarbs + data.estimatedCarbsG;
+                updatedLog.fatG = (updatedLog.fatG || 0) - oldFat + data.estimatedFatG;
+
+                updatedLog[mealType] = newMealData;
+                logsCopy[existingLogIndex] = updatedLog;
+
+            } else {
+                const newLog = createNewLogEntry(dateStr);
+                newLog[mealType] = newMealData;
+                newLog.actualIntake = data.estimatedCalories;
+                newLog.proteinG = data.estimatedProteinG;
+                newLog.carbsG = data.estimatedCarbsG;
+                newLog.fatG = data.estimatedFatG;
+                logsCopy = [newLog, ...logsCopy];
+            }
+        }
+        return processAllLogs(logsCopy, userInfo);
+    });
+};
+
+const createNewLogEntry = (dateStr: string): DailyLogEntry => ({
+    id: crypto.randomUUID(),
+    date: dateStr,
+    weightKg: null, waistCm: null, waterL: null, sleepH: null,
+    breakfast: { text: '' }, lunch: { text: '' }, dinner: { text: '' }, 
+    activity: '',
+    bmr: null, tdee: null,
+    estimatedExpenditure: null, actualIntake: null, calorieDeficit: null,
+    proteinG: null, carbsG: null, fatG: null,
+    summary: ''
+});
+
 
   const handleUpdate = (id: string, field: keyof DailyLogEntry, value: string) => {
     setLogs(prevLogs => {
@@ -446,6 +520,24 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
       return processAllLogs(updatedLogs, userInfo);
     });
   };
+
+  const handleUpdateMealText = (id: string, mealType: 'breakfast' | 'lunch' | 'dinner', newText: string) => {
+    setLogs(prevLogs => {
+        const updatedLogs = prevLogs.map(log => {
+            if (log.id === id) {
+                return {
+                    ...log,
+                    [mealType]: {
+                        ...log[mealType],
+                        text: newText,
+                    },
+                };
+            }
+            return log;
+        });
+        return updatedLogs; // No need to processAllLogs, text change doesn't affect calculations
+    });
+  };
   
   const handleAddRow = () => {
     setIsConfirmingClear(false);
@@ -460,18 +552,7 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
         return;
     }
 
-    const newLog: DailyLogEntry = {
-        id: crypto.randomUUID(),
-        date: todayStr,
-        weightKg: null, waistCm: null, waterL: null, sleepH: null,
-        breakfast: '', lunch: '', dinner: '', activity: '',
-        actualIntake: null, calorieDeficit: null,
-        estimatedExpenditure: null,
-        bmr: null,
-        tdee: null,
-        proteinG: null, carbsG: null, fatG: null,
-        summary: ''
-    };
+    const newLog = createNewLogEntry(todayStr);
     setLogs(prev => processAllLogs([newLog, ...prev], userInfo));
   }
 
@@ -702,6 +783,7 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
       }
 
       const numericFields: (keyof DailyLogEntry)[] = ['weightKg', 'waistCm', 'waterL', 'sleepH', 'estimatedExpenditure', 'actualIntake', 'proteinG', 'carbsG', 'fatG', 'calorieDeficit'];
+      const mealFields: (keyof DailyLogEntry)[] = ['breakfast', 'lunch', 'dinner'];
       
       const importedLogs = dataRows.map((rowStr): DailyLogEntry | null => {
         const values = parseCsvRow(rowStr);
@@ -715,7 +797,9 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
 
             if (value === undefined || value === null) continue;
 
-            if (numericFields.includes(field)) {
+            if (mealFields.includes(field)) {
+                (entry as any)[field] = { text: value };
+            } else if (numericFields.includes(field)) {
                 let valueToParse = value;
 
                 if (valueToParse.includes('~')) {
@@ -739,17 +823,7 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
             return null;
         }
 
-        const defaults: Omit<DailyLogEntry, 'id'> = {
-            date: '', weightKg: null, waistCm: null, waterL: null, sleepH: null,
-            breakfast: '', lunch: '', dinner: '', activity: '',
-            actualIntake: null, calorieDeficit: null,
-            estimatedExpenditure: null,
-            bmr: null, tdee: null,
-            proteinG: null, carbsG: null, fatG: null,
-            summary: ''
-        };
-
-        return { ...defaults, ...entry };
+        return { ...createNewLogEntry(entry.date), ...entry };
       }).filter((log): log is DailyLogEntry => log !== null);
       
       if (importedLogs.length === 0) {
@@ -790,6 +864,9 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
+      {modalMeal && (
+        <AnalysisDetailModal meal={modalMeal} onClose={() => setModalMeal(null)} />
+      )}
       <div className="max-w-full mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -850,10 +927,10 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
         <div className="flow-root">
             <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
                 <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+                    <div className="overflow-hidden shadow-lg ring-1 ring-black ring-opacity-5 rounded-xl bg-white dark:bg-gray-800">
                         <table className="min-w-full table-fixed">
-                            <thead className="bg-gray-50 dark:bg-gray-800">
-                                <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-800/50">
+                                <tr>
                                     <th scope="col" className="relative w-12 px-6 sm:w-16 sm:px-8">
                                         <input
                                             type="checkbox"
@@ -864,14 +941,14 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
                                             aria-label="Select all logs"
                                         />
                                     </th>
-                                    {tableColumns.map(col => <th key={col.key} scope="col" className={`py-3.5 px-3 text-left text-sm font-semibold text-gray-900 dark:text-white ${col.width}`}>{col.header}</th>)}
-                                    <th scope="col" className="py-3.5 px-3 text-sm font-semibold text-gray-900 dark:text-white w-32 text-center">操作</th>
+                                    {tableColumns.map(col => <th key={col.key} scope="col" className={`py-4 px-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider ${col.width}`}>{col.header}</th>)}
+                                    <th scope="col" className="py-4 px-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">操作</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                 {sortedLogs.length > 0 ? sortedLogs.map(log => (
-                                    <tr key={log.id} className={`divide-x divide-gray-200 dark:divide-gray-700 ${selectedIds.has(log.id) ? "bg-indigo-50 dark:bg-indigo-900/30" : "even:bg-white dark:even:bg-gray-900/70 odd:bg-gray-50/50 dark:odd:bg-gray-800/60"}`}>
-                                        <td className="relative w-12 px-6 sm:w-16 sm:px-8">
+                                    <tr key={log.id} className={`transition-colors duration-150 ease-in-out ${selectedIds.has(log.id) ? "bg-indigo-50 dark:bg-indigo-900/30" : "hover:bg-gray-50/50 dark:hover:bg-gray-900/20"}`}>
+                                        <td className="relative w-12 px-6 sm:w-16 sm:px-8 align-top py-3">
                                             {selectedIds.has(log.id) && <div className="absolute inset-y-0 left-0 w-0.5 bg-indigo-600"></div>}
                                             <input
                                                 type="checkbox"
@@ -882,36 +959,50 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
                                             />
                                         </td>
                                         {tableColumns.map(col => (
-                                            <td key={`${log.id}-${col.key}`} className={`p-0 text-sm text-gray-700 dark:text-gray-300 align-top ${calculatedColumns.includes(col.key) ? 'bg-gray-100 dark:bg-gray-800' : ''}`}>
-                                                <EditableCell
-                                                    value={log[col.key]}
-                                                    type={col.type}
-                                                    align={col.align}
-                                                    onSave={(value) => handleUpdate(log.id, col.key, value)}
-                                                />
+                                            <td key={`${log.id}-${col.key}`} className={`px-2 py-3 text-sm text-gray-700 dark:text-gray-300 align-top text-center ${calculatedColumns.includes(col.key) ? 'bg-gray-50/30 dark:bg-gray-900/30' : ''}`}>
+                                                { (col.key === 'breakfast' || col.key === 'lunch' || col.key === 'dinner') ? (
+                                                    <MealCell 
+                                                        meal={log[col.key as 'breakfast' | 'lunch' | 'dinner']}
+                                                        onTextSave={(value) => handleUpdateMealText(log.id, col.key as 'breakfast' | 'lunch' | 'dinner', value)}
+                                                        onCardClick={() => setModalMeal(log[col.key as 'breakfast' | 'lunch' | 'dinner'])}
+                                                    />
+                                                ) : (
+                                                    <div className="p-2 min-h-[3.5rem] flex items-center">
+                                                        <EditableCell
+                                                            value={log[col.key]}
+                                                            type={col.type}
+                                                            align={col.align}
+                                                            onSave={(value) => handleUpdate(log.id, col.key, value)}
+                                                        />
+                                                    </div>
+                                                )}
                                             </td>
                                         ))}
-                                        <td className="p-2 whitespace-nowrap text-sm text-gray-500 align-middle text-center">
-                                            <div className="flex items-center justify-center gap-x-2">
-                                                {analyzingIds.has(log.id) ? (
-                                                    <div className="flex items-center justify-center text-indigo-500">
-                                                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse delay-75"></div>
-                                                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse delay-150 mx-1"></div>
-                                                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse delay-300"></div>
-                                                    </div>
-                                                ) : (
-                                                    <button onClick={() => handleReanalyzeRow(log.id)} title="重新分析营养和消耗" className="p-1 rounded-md text-indigo-600 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-gray-700 transition-colors">
-                                                        <SparklesIcon className="w-5 h-5"/>
-                                                    </button>
-                                                )}
-
+                                        <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-500 align-middle text-center">
+                                            <div className="flex items-center justify-center gap-x-1">
                                                 {deletingId === log.id ? (
-                                                    <div className="flex items-center space-x-1">
-                                                        <button onClick={() => handleDeleteRow(log.id)} className="px-2 py-1 text-xs font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition-colors">确认</button>
-                                                        <button onClick={() => setDeletingId(null)} className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300 dark:text-gray-200 dark:bg-gray-600 dark:hover:bg-gray-500 transition-colors">取消</button>
-                                                    </div>
+                                                    <>
+                                                        <button onClick={() => handleDeleteRow(log.id)} title="确认删除" className="p-1.5 rounded-full text-green-500 hover:bg-green-100 dark:hover:bg-gray-700 transition-colors">
+                                                            <CheckIcon className="w-5 h-5"/>
+                                                        </button>
+                                                        <button onClick={() => setDeletingId(null)} title="取消" className="p-1.5 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-gray-700 transition-colors">
+                                                            <XIcon className="w-5 h-5"/>
+                                                        </button>
+                                                    </>
                                                 ) : (
-                                                    <button onClick={() => handleDeleteRow(log.id)} className="font-medium text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1 rounded-md hover:bg-red-50 dark:hover:bg-gray-700 transition-colors">删除</button>
+                                                    <>
+                                                        <button 
+                                                            onClick={() => handleReanalyzeRow(log.id)} 
+                                                            title="重新分析营养和消耗" 
+                                                            disabled={analyzingIds.has(log.id)}
+                                                            className="p-1.5 rounded-full text-indigo-500 hover:bg-indigo-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        >
+                                                            <SparklesIcon className={`w-5 h-5 ${analyzingIds.has(log.id) ? 'animate-spin' : ''}`}/>
+                                                        </button>
+                                                        <button onClick={() => handleDeleteRow(log.id)} title="删除记录" className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-gray-700 transition-colors">
+                                                            <TrashIcon className="w-5 h-5"/>
+                                                        </button>
+                                                    </>
                                                 )}
                                             </div>
                                         </td>

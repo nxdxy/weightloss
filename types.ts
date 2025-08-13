@@ -7,6 +7,12 @@ export interface UserInfo {
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | null;
 }
 
+export interface MealLog {
+  text: string; // Will store a summary like "鸡肉沙拉 (~450 kcal)"
+  image?: string;
+  analysis?: AnalyzedMealData; // The full analysis object
+}
+
 export interface DailyLogEntry {
   id: string;
   date: string;
@@ -14,9 +20,9 @@ export interface DailyLogEntry {
   waistCm: number | null;
   waterL: number | null;
   sleepH: number | null;
-  breakfast: string;
-  lunch: string;
-  dinner: string;
+  breakfast: MealLog;
+  lunch: MealLog;
+  dinner: MealLog;
   activity: string;
   bmr: number | null; // ADDED: Basal Metabolic Rate
   tdee: number | null; // ADDED: Total Daily Energy Expenditure
@@ -106,12 +112,19 @@ export interface StoredAnalysisReport {
 }
 
 export interface AnalyzedMealData {
-  generatedMealName: string; // e.g., "Chicken Salad with Black Coffee"
+  generatedMealName: string; // "鸡肉沙拉"
   estimatedCalories: number;
   estimatedProteinG: number;
   estimatedCarbsG: number;
   estimatedFatG: number;
+  // New fields inspired by the screenshot
+  description: string; // "一份看起来很健康的沙拉，包含烤鸡胸肉、混合生菜、圣女果和一些坚果..."
+  tags: string[]; // ["高蛋白", "减脂餐", "健康"]
+  identifiedIngredients: string[]; // ["鸡胸肉", "生菜", "圣女果", "黄瓜", "杏仁"]
+  dominantColors: string[]; // ["绿色", "白色", "红色"]
+  cuisineStyle: string; // "西式简餐"
 }
+
 
 export interface FullDayAnalysisData {
   estimatedIntakeCalories: number;

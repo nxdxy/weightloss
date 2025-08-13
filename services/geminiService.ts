@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type, Part, GenerateContentResponse } from "@google/genai";
-import type { UserInfo, DailyLogEntry, AnalysisReportData, AnalyzedMealData, FullDayAnalysisData, ChatMessage } from '../types';
+import type { UserInfo, DailyLogEntry, AnalysisReportData, AnalyzedMealData, FullDayAnalysisData, ChatMessage, MealLog } from '../types';
 
 // Function to get the API key from localStorage
 const getApiKey = (): string | null => {
@@ -149,28 +150,21 @@ const analysisReportSchema = {
 const singleMealAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
-        generatedMealName: {
-            type: Type.STRING,
-            description: "根据食物条目生成一个简洁的餐食名称，例如'鸡肉沙拉和黑咖啡'。"
-        },
-        estimatedCalories: {
-            type: Type.NUMBER,
-            description: "估算的该餐食的总热量（千卡）。"
-        },
-        estimatedProteinG: {
-            type: Type.NUMBER,
-            description: "估算的该餐食的总蛋白质（克）。"
-        },
-        estimatedCarbsG: {
-            type: Type.NUMBER,
-            description: "估算的该餐食的总碳水化合物（克）。"
-        },
-        estimatedFatG: {
-            type: Type.NUMBER,
-            description: "估算的该餐食的总脂肪（克）。"
-        }
+        generatedMealName: { type: Type.STRING, description: "根据食物条目生成一个简洁的餐食名称，例如'鸡肉沙拉和黑咖啡'。" },
+        estimatedCalories: { type: Type.NUMBER, description: "估算的该餐食的总热量（千卡）。" },
+        estimatedProteinG: { type: Type.NUMBER, description: "估算的该餐食的总蛋白质（克）。" },
+        estimatedCarbsG: { type: Type.NUMBER, description: "估算的该餐食的总碳水化合物（克）。" },
+        estimatedFatG: { type: Type.NUMBER, description: "估算的该餐食的总脂肪（克）。" },
+        description: { type: Type.STRING, description: "对餐食的详细描述，包括外观、可能的烹饪方法和整体印象。" },
+        tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: "描述这顿饭的标签数组，例如['健康餐', '高蛋白', '快手菜', '减脂']。" },
+        identifiedIngredients: { type: Type.ARRAY, items: { type: Type.STRING }, description: "一个包含所有识别出的食物成分的数组，例如['鸡胸肉', '生菜', '圣女果', '杏仁片']。" },
+        dominantColors: { type: Type.ARRAY, items: { type: Type.STRING }, description: "识别图片中食物的主要颜色，例如['绿色', '白色', '红色']。仅返回颜色名称。" },
+        cuisineStyle: { type: Type.STRING, description: "推断这道菜的菜系风格，例如'地中海风'、'亚洲风'、'家常菜'或'西式快餐'。" }
     },
-    required: ['generatedMealName', 'estimatedCalories', 'estimatedProteinG', 'estimatedCarbsG', 'estimatedFatG']
+    required: [
+        'generatedMealName', 'estimatedCalories', 'estimatedProteinG', 'estimatedCarbsG', 'estimatedFatG',
+        'description', 'tags', 'identifiedIngredients', 'dominantColors', 'cuisineStyle'
+    ]
 };
 
 const fullDayAnalysisSchema = {
@@ -195,11 +189,21 @@ const fullDayAnalysisSchema = {
 
 const modelName = "gemini-2.5-flash";
 
+// Helper function to strip images from log data for text-only analysis prompts.
+const sanitizeLogForTextPrompt = (log: DailyLogEntry) => {
+    return {
+        ...log,
+        breakfast: log.breakfast.text,
+        lunch: log.lunch.text,
+        dinner: log.dinner.text,
+    };
+};
+
 export const analyzeMealInput = async (userInput: string, image: File | null = null, mealTypeHint: string): Promise<AnalyzedMealData> => {
     if (!userInput.trim() && !image) throw new Error("User input or image is required.");
     const ai = getAiClient();
     
-    const promptText = `你是一位专业的营养分析师，以精准和客观著称。请严格根据用户提供的餐食图片和/或文字描述，按照JSON schema返回分析结果。\n\n分析上下文:\n- 餐别: "${mealTypeHint}"\n- 用户文字描述: "${userInput || '无'}"\n\n分析标准:\n1.  **主要依据**: 如果提供了图片，以图片内容为主要分析对象。文字描述仅作为补充。\n2.  **精准估算**: 识别所有食物和饮料，并尽可能准确地估算总热量、蛋白质、碳水化合物和脂肪含量。\n3.  **客观命名**: 生成一个简洁、客观的餐食名称来概括这顿饭，例如“烤鸡胸肉配西兰花”。\n\n你的回答必须是严格遵循schema的JSON对象，不包含任何解释或附加文本。`;
+    const promptText = `你是一位专业的营养分析师，以精准和客观著称。请严格根据用户提供的餐食图片和/或文字描述，按照JSON schema返回分析结果。\n\n分析上下文:\n- 餐别: "${mealTypeHint}"\n- 用户文字描述: "${userInput || '无'}"\n\n分析标准:\n1.  **主要依据**: 如果提供了图片，以图片内容为主要分析对象。文字描述仅作为补充。\n2.  **精准估算**: 识别所有食物和饮料，并尽可能准确地估算总热量、蛋白质、碳水化合物和脂肪含量。\n3.  **客观命名**: 生成一个简洁、客观的餐食名称来概括这顿饭，例如“烤鸡胸肉配西兰花”。\n4.  **详细分析**: 根据图片和文字，提供关于这顿饭的详细描述、识别所有成分、推断菜系风格、提取主要食物颜色，并生成3-5个最相关的标签（例如烹饪方法、饮食类型）。\n\n你的回答必须是严格遵循schema的JSON对象，不包含任何解释或附加文本。`;
     
     const parts: Part[] = [];
     if (image) {
@@ -225,7 +229,7 @@ export const analyzeMealInput = async (userInput: string, image: File | null = n
 
 export const analyzeFullDayNutrition = async (logData: DailyLogEntry): Promise<FullDayAnalysisData> => {
     const ai = getAiClient();
-    const promptText = `你是一位严格、专业的瘦身教练。你的任务是基于客观数据，提供严谨、真实的分析。请分析用户提供的单日完整记录，并严格按照JSON schema返回分析结果。\n\n用户的单日记录:\n${JSON.stringify(logData)}\n\n你的任务是:\n1.  **分析摄入**: 精准识别所有餐食记录，估算全天摄入的总热量、蛋白质、碳水化合物和脂肪。\n2.  **分析消耗**: 根据用户的运动记录，估算当天的总运动消耗热量。无记录则为0。\n3.  **生成小结 (dailySummary)**: 基于所有数据（摄入、消耗、热量缺口等），生成一句客观、严格的中文评价。不要使用鼓励性或模棱两可的语言。\n\n请确保你的整个回答都是一个严格遵循schema的JSON对象，不要添加任何额外的解释或文本。`;
+    const promptText = `你是一位严格、专业的瘦身教练。你的任务是基于客观数据，提供严谨、真实的分析。请分析用户提供的单日完整记录，并严格按照JSON schema返回分析结果。\n\n用户的单日记录:\n${JSON.stringify(sanitizeLogForTextPrompt(logData))}\n\n你的任务是:\n1.  **分析摄入**: 精准识别所有餐食记录，估算全天摄入的总热量、蛋白质、碳水化合物和脂肪。\n2.  **分析消耗**: 根据用户的运动记录，估算当天的总运动消耗热量。无记录则为0。\n3.  **生成小结 (dailySummary)**: 基于所有数据（摄入、消耗、热量缺口等），生成一句客观、严格的中文评价。不要使用鼓励性或模棱两可的语言。\n\n请确保你的整个回答都是一个严格遵循schema的JSON对象，不要添加任何额外的解释或文本。`;
     
     try {
         const response = await ai.models.generateContent({
@@ -242,11 +246,13 @@ export const analyzeFullDayNutrition = async (logData: DailyLogEntry): Promise<F
 
 export const generateAnalysisReport = async (userInfo: UserInfo, logs: DailyLogEntry[]): Promise<AnalysisReportData> => {
     const ai = getAiClient();
+    const sanitizedLogs = logs.map(sanitizeLogForTextPrompt);
+
     const prompt = `你是一位严格、专业的健身教练和营养专家，以客观、数据驱动和深度分析著称。\n
 你的任务是分析以下用户的个人资料和最近最多60天的每日记录，并严格按照JSON schema返回一份全面、专业且充满洞察的中文分析报告。\n
 你的分析必须是真实、直接、一针见血的。避免空洞的鼓励，专注于提供可执行的建议和深刻的见解。\n\n
 **用户个人资料:** ${JSON.stringify(userInfo)}\n
-**用户每日记录 (最近60天):** ${JSON.stringify(logs.slice(-60))}\n\n
+**用户每日记录 (最近60天):** ${JSON.stringify(sanitizedLogs.slice(-60))}\n\n
 **核心分析指令:**\n
 1.  **数据为王**: 所有指标（得分、平均值、趋势）必须严格基于所提供的数据进行计算。\n
 2.  **全面分析**: 利用所有可用的数据字段，包括体重、腰围、饮水、睡眠、运动消耗、饮食详情和宏量营养素。\n
