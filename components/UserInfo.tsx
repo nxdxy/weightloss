@@ -30,12 +30,12 @@ export const UserInfoForm: React.FC<UserInfoProps> = ({ userInfo, setUserInfo })
     <div className="p-4 sm:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto">
             <div className="text-center">
-                <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">个人资料</h1>
-                <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">此信息有助于我们为您提供个性化的分析和建议。</p>
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">个人资料</h1>
+                <p className="mt-2 text-base text-gray-600 dark:text-gray-400 sm:text-lg">此信息有助于我们为您提供个性化的分析和建议。</p>
             </div>
 
-            <div className="mt-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
-                <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            <div className="mt-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8">
+                <form className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     <div>
                         <Label htmlFor="age">年龄</Label>
                         <Input id="age" name="age" type="number" value={userInfo.age || ''} onChange={handleChange} placeholder="例如：30" />

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import type { UserInfo, DailyLogEntry, StoredAnalysisReport } from './types';
 import { Page } from './types';
-import { UserIcon, ChatIcon, TableIcon, ChartIcon } from './components/Icons';
+import { UserIcon, ChatIcon, TableIcon, ChartIcon, MenuIcon, XIcon } from './components/Icons';
 import { UserInfoForm } from './components/UserInfo';
 import { DataLog } from './components/DataLog';
 import { AnalysisReport } from './components/AnalysisReport';
@@ -29,6 +29,7 @@ const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolea
 
 const App: React.FC = () => {
     const [currentPage, setCurrentPage] = useState<Page>(Page.PROFILE);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     
     // User Info State
     const [userInfo, setUserInfo] = useState<UserInfo>(() => {
@@ -120,13 +121,31 @@ const App: React.FC = () => {
       { page: Page.REPORT, icon: <ChartIcon className="w-6 h-6" />, label: '分析报告' }
     ];
 
+    const handleNavItemClick = (page: Page) => {
+        setCurrentPage(page);
+        setIsSidebarOpen(false); // Close sidebar on navigation
+    };
+
     return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-            <aside className="w-64 flex-shrink-0 bg-white dark:bg-gray-800 shadow-md">
+             {/* Sidebar Overlay for mobile */}
+             {isSidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                    aria-hidden="true"
+                ></div>
+            )}
+
+            {/* Sidebar */}
+            <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-gray-800 shadow-md transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out`}>
                 <div className="flex flex-col h-full p-4">
-                    <div className="flex items-center mb-6">
+                    <div className="flex items-center mb-6 h-10">
                          <span className="text-3xl">💪</span>
                          <h1 className="ml-3 text-2xl font-bold text-gray-900 dark:text-white">健身伙伴</h1>
+                         <button onClick={() => setIsSidebarOpen(false)} className="ml-auto md:hidden p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg" aria-label="Close sidebar">
+                            <XIcon className="w-6 h-6" />
+                         </button>
                     </div>
                     <nav>
                         <ul>
@@ -136,14 +155,24 @@ const App: React.FC = () => {
                               icon={item.icon}
                               label={item.label}
                               isActive={currentPage === item.page}
-                              onClick={() => setCurrentPage(item.page)}
+                              onClick={() => handleNavItemClick(item.page)}
                             />
                           ))}
                         </ul>
                     </nav>
                 </div>
             </aside>
+
             <main className="flex-1 flex flex-col overflow-hidden">
+                 {/* Top bar with hamburger menu for mobile */}
+                 <header className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                     <button onClick={() => setIsSidebarOpen(true)} className="p-1 text-gray-500 dark:text-gray-400" aria-label="Open sidebar">
+                        <MenuIcon className="w-6 h-6" />
+                    </button>
+                    <h2 className="text-lg font-bold">{currentPage}</h2>
+                    <div className="w-6"></div> {/* Spacer to balance title */}
+                </header>
+
                 <div className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900">
                     {renderPage()}
                 </div>

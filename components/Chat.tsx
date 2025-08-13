@@ -115,13 +115,13 @@ const renderMarkdown = (text: string) => {
 const ChatMessageDisplay: React.FC<{ message: ChatMessage }> = ({ message }) => {
   const isUser = message.role === 'user';
   return (
-    <div className={`flex items-start gap-4 ${isUser ? 'justify-end' : ''}`}>
+    <div className={`flex items-start gap-3 sm:gap-4 ${isUser ? 'justify-end' : ''}`}>
         {!isUser && (
-            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
+            <div className="flex-shrink-0 h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
               AI
             </div>
         )}
-        <div className={`max-w-lg p-4 rounded-xl shadow-md ${isUser ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
+        <div className={`max-w-[85%] sm:max-w-md lg:max-w-lg p-3 sm:p-4 rounded-xl shadow-md ${isUser ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
           {message.image && <img src={message.image} alt="user upload" className="rounded-lg mb-2 max-h-60" />}
           {isUser ? (
              <p className="whitespace-pre-wrap">{message.text}</p>
@@ -130,8 +130,8 @@ const ChatMessageDisplay: React.FC<{ message: ChatMessage }> = ({ message }) => 
           )}
         </div>
         {isUser && (
-            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-              <UserIcon className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+            <div className="flex-shrink-0 h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+              <UserIcon className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600 dark:text-gray-300" />
             </div>
         )}
     </div>
@@ -225,7 +225,7 @@ export const ChatInterface: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900">
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
             {messages.map((msg) => (
                 <ChatMessageDisplay key={msg.id} message={msg} />
             ))}
@@ -243,7 +243,7 @@ export const ChatInterface: React.FC = () => {
             )}
             <div ref={messagesEndRef} />
         </div>
-        <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        <div className="p-2 sm:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
             <div className="max-w-4xl mx-auto">
               {imagePreview && (
                 <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg relative w-fit">

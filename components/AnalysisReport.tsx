@@ -22,7 +22,7 @@ const Gauge = ({ value, label }: { value: number; label: string }) => {
 
     return (
         <div className="relative flex flex-col items-center justify-center">
-            <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 100 100">
+            <svg className="w-32 h-32 sm:w-40 sm:h-40 transform -rotate-90" viewBox="0 0 100 100">
                 <circle className="text-gray-200 dark:text-gray-700" strokeWidth="10" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
                 <circle
                     className={colorClass}
@@ -39,7 +39,7 @@ const Gauge = ({ value, label }: { value: number; label: string }) => {
                 />
             </svg>
             <div className="absolute flex flex-col items-center">
-                <span className={`text-4xl font-bold ${colorClass}`}>{Math.round(percentage)}</span>
+                <span className={`text-3xl sm:text-4xl font-bold ${colorClass}`}>{Math.round(percentage)}</span>
                 <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">{label}</span>
             </div>
         </div>
@@ -59,16 +59,16 @@ const MetricDisplay = ({ icon: Icon, label, value, unit }: { icon: React.Element
 );
 
 const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{title}</h3>
-    <div className="h-80">
+  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
+    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">{title}</h3>
+    <div className="h-64 sm:h-80">
       {children}
     </div>
   </div>
 );
 
 const InsightCard: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode; }> = ({ title, icon, children }) => (
-  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 h-full border border-gray-200 dark:border-gray-700">
+  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-6 h-full border border-gray-200 dark:border-gray-700">
     <div className="flex items-center mb-3">
       <div className="text-indigo-500">{icon}</div>
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white ml-3">{title}</h3>
@@ -189,10 +189,10 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
       const isProfileIncomplete = !userInfo.age || !userInfo.gender || !userInfo.height;
       return (
         <div className="text-center h-96 flex flex-col justify-center items-center">
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg max-w-lg shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg max-w-lg shadow-lg border border-gray-200 dark:border-gray-700">
               <SparklesIcon className="w-16 h-16 mx-auto text-indigo-500" />
-              <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">生成您的第一份AI分析报告</h2>
-              <p className="mt-2 text-md text-gray-600 dark:text-gray-400">
+              <h2 className="mt-4 text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">生成您的第一份AI分析报告</h2>
+              <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
                 AI教练将深入分析您的所有记录，提供关于进展、营养、睡眠等方面的专业见解。
               </p>
               {error && <p className="text-red-500 dark:text-red-400 font-medium mt-4">{error}</p>}
@@ -307,7 +307,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
             </div>
 
             {/* Section 3: AI Insights */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-8">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI 智能洞察</h2>
                 <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div className="space-y-6">
@@ -348,8 +348,8 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">您的进度仪表盘</h1>
-            <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">数据驱动洞察，助力您的健身之旅。</p>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">您的进度仪表盘</h1>
+            <p className="mt-2 text-base text-gray-600 dark:text-gray-400 sm:text-lg">数据驱动洞察，助力您的健身之旅。</p>
         </div>
         <div>
             {renderContent()}

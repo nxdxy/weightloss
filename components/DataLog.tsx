@@ -60,7 +60,7 @@ const EditableCell: React.FC<{ value: string | number | null; onSave: (value: st
     const isEmpty = value === null || value === undefined || value === '';
 
     return (
-        <div onClick={() => setEditing(true)} className={`w-full h-full cursor-pointer p-2 whitespace-pre-wrap min-h-[4rem] flex items-center justify-${align === 'center' ? 'center' : align === 'right' ? 'end' : 'start'}`}>
+        <div onClick={() => setEditing(true)} className={`w-full h-full cursor-pointer p-2 whitespace-pre-wrap min-h-[3.5rem] flex items-center justify-${align === 'center' ? 'center' : align === 'right' ? 'end' : 'start'}`}>
             {isEmpty
                 ? <span className="text-gray-400 dark:text-gray-600 italic">空</span> 
                 : String(value)}
@@ -154,7 +154,7 @@ const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, date: str
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
             <div className="flex items-center mb-4">
                 <SparklesIcon className="w-6 h-6 text-indigo-500" />
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white ml-2">AI 智能膳食日志</h2>
@@ -195,24 +195,24 @@ const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, date: str
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     disabled={isAnalyzing}
-                    rows={4}
+                    rows={3}
                     className="flex-grow w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                     placeholder="例如：午餐吃了沙拉，酱汁是分开放的...（可选，AI会以图片为准）"
                 />
-                <div className="flex-shrink-0 flex flex-col items-center justify-center gap-2">
+                <div className="flex-shrink-0 w-full md:w-40 flex flex-col items-center justify-center gap-2">
                     <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleImageChange} className="hidden" />
                     {!imagePreview ? (
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isAnalyzing}
-                            className="w-full md:w-32 h-full min-h-[6rem] flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            className="w-full h-32 md:h-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                         >
                             <CameraIcon className="w-8 h-8" />
                             <span className="text-sm mt-1">上传/拍照</span>
                         </button>
                     ) : (
-                        <div className="relative w-32 h-full">
+                        <div className="relative w-full h-32 md:h-full">
                             <img src={imagePreview} alt="Meal preview" className="w-full h-full object-cover rounded-lg" />
                             <button onClick={removeImage} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center text-sm shadow-md transition-transform hover:scale-110">&times;</button>
                             <button 
@@ -767,12 +767,12 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="max-w-full mx-auto">
-        <div className="sm:flex sm:items-center sm:justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">每日记录</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">每日记录</h1>
               <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">追踪您的进展。点击单元格即可编辑。</p>
             </div>
-            <div className="mt-4 sm:mt-0 flex flex-wrap gap-2 items-center justify-end">
+            <div className="flex flex-wrap gap-2 items-center justify-start sm:justify-end">
                 {selectedIds.size > 0 && (
                     <div className="flex items-center gap-2">
                         <button
