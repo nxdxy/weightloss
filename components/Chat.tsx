@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ChatMessage } from '../types';
-import { createChat, fileToGenerativePart } from '../services/geminiService';
-import type { Chat } from '@google/genai';
+import { sendChatMessageStream } from '../services/geminiService';
 import { SendIcon, CameraIcon, UserIcon } from './Icons';
 
 // A markdown to HTML converter for chat messages
@@ -145,12 +144,10 @@ export const ChatInterface: React.FC = () => {
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const chatRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    chatRef.current = createChat();
     setMessages([{ id: 'init', role: 'model', text: '您好！今天我能为您的健身之旅提供什么帮助？您可以向我提问，或者上传您的餐食照片进行分析。'}])
   }, []);
 
@@ -174,8 +171,7 @@ export const ChatInterface: React.FC = () => {
 
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() && !image) return;
-    if (isLoading) return;
+    if ((!input.trim() && !image) || isLoading) return;
     
     setIsLoading(true);
 
@@ -185,43 +181,47 @@ export const ChatInterface: React.FC = () => {
       text: input,
       ...(imagePreview && { image: imagePreview }),
     };
-    setMessages(prev => [...prev, userMessage]);
+    // Add user message to the UI immediately
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     
     // Reset inputs
+    const currentInput = input;
+    const currentImage = image;
     setInput('');
     setImage(null);
     setImagePreview(null);
     
     try {
-      const chat = chatRef.current;
-      if (!chat) throw new Error("Chat not initialized");
+      // Pass the history *before* the new user message was added
+      const historyForApi = messages.slice(1);
+      const stream = await sendChatMessageStream(historyForApi, currentInput, currentImage);
 
-      const messageParts: (string | object)[] = [];
-      if (image) {
-        const imagePart = await fileToGenerativePart(image);
-        messageParts.push(imagePart);
-      }
-      if (input.trim()) {
-        messageParts.push({ text: input });
+      if (!stream) {
+          throw new Error("Failed to get response stream from the server.");
       }
       
-      const stream = await chat.sendMessageStream({ message: messageParts });
-
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+      
       let modelResponse = '';
       const modelMessageId = `model-${Date.now()}`;
       setMessages(prev => [...prev, { id: modelMessageId, role: 'model', text: '...' }]);
 
-      for await (const chunk of stream) {
-        modelResponse += chunk.text;
-        setMessages(prev => prev.map(m => m.id === modelMessageId ? { ...m, text: modelResponse } : m));
+      while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          modelResponse += decoder.decode(value, { stream: true });
+          setMessages(prev => prev.map(m => m.id === modelMessageId ? { ...m, text: modelResponse } : m));
       }
+
     } catch (error) {
       console.error("Error sending message:", error);
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'model', text: '抱歉，我遇到了一个错误。请重试。' }]);
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'model', text: `抱歉，我遇到了一个错误: ${error instanceof Error ? error.message : 'Unknown error'}` }]);
     } finally {
       setIsLoading(false);
     }
-  }, [input, image, imagePreview, isLoading]);
+  }, [input, image, imagePreview, isLoading, messages]);
 
   return (
     <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900">
