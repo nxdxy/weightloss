@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import type { DailyLogEntry, AnalyzedMealData, FullDayAnalysisData, UserInfo, Page, MealLog } from '../types';
-import { UploadIcon, SparklesIcon, CameraIcon, UserIcon, XIcon, TrashIcon, CheckIcon } from './Icons';
+import { UploadIcon, SparklesIcon, CameraIcon, UserIcon, XIcon, TrashIcon, CheckIcon, ScaleIcon, WaterDropIcon, ClockIcon, ActivityIcon, ClipboardDocumentListIcon, FireIcon, TargetIcon } from './Icons';
 import { analyzeMealInput, analyzeFullDayNutrition } from '../services/geminiService';
 import { Page as PageEnum } from '../types';
 import { AnalysisDetailModal } from './AnalysisDetailModal';
@@ -14,10 +14,16 @@ interface DataLogProps {
   onApiKeyMissing: () => void;
 }
 
-const EditableCell: React.FC<{ value: string | number | null; onSave: (value: string) => void; type?: string, align?: 'left' | 'right' | 'center' }> = ({ value, onSave, type = 'text', align = 'left' }) => {
+const EditableCell: React.FC<{
+    value: string | number | null;
+    onSave: (value: string) => void;
+    type?: string;
+    align?: 'left' | 'right' | 'center';
+    multiline?: boolean;
+}> = ({ value, onSave, type = 'text', align = 'left', multiline = false }) => {
     const [editing, setEditing] = useState(false);
     const [currentValue, setCurrentValue] = useState(value);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
     const handleSave = () => {
         onSave(currentValue?.toString() || '');
@@ -25,7 +31,7 @@ const EditableCell: React.FC<{ value: string | number | null; onSave: (value: st
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !multiline && !e.shiftKey) {
             handleSave();
         } else if (e.key === 'Escape') {
             setCurrentValue(value);
@@ -36,7 +42,9 @@ const EditableCell: React.FC<{ value: string | number | null; onSave: (value: st
     useEffect(() => {
         if (editing && inputRef.current) {
             inputRef.current.focus();
-            inputRef.current.select();
+            if (inputRef.current instanceof HTMLInputElement) {
+                inputRef.current.select();
+            }
         }
     }, [editing]);
 
@@ -44,25 +52,34 @@ const EditableCell: React.FC<{ value: string | number | null; onSave: (value: st
         setCurrentValue(value);
     }, [value]);
 
-
     if (editing) {
-        return (
-            <input
-                ref={inputRef}
-                type={type}
-                value={currentValue === null ? '' : currentValue}
+        return multiline ? (
+             <textarea
+                ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                value={currentValue === null ? '' : String(currentValue)}
                 onChange={(e) => setCurrentValue(e.target.value)}
                 onBlur={handleSave}
                 onKeyDown={handleKeyDown}
-                className={`w-full h-full bg-blue-100 dark:bg-blue-900 border-2 border-blue-500 rounded p-2 text-gray-900 dark:text-white text-${align}`}
+                className={`w-full bg-blue-100 dark:bg-blue-900 border-2 border-blue-500 rounded p-2 text-gray-900 dark:text-white text-${align} min-h-[80px] resize-y`}
+                rows={3}
+            />
+        ) : (
+            <input
+                ref={inputRef as React.RefObject<HTMLInputElement>}
+                type={type}
+                value={currentValue === null ? '' : String(currentValue)}
+                onChange={(e) => setCurrentValue(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={handleKeyDown}
+                className={`w-full h-full bg-blue-100 dark:bg-blue-900 border-2 border-blue-500 rounded p-1 text-gray-900 dark:text-white text-${align}`}
             />
         );
     }
 
-    const isEmpty = value === null || value === undefined || value === '';
+    const isEmpty = value === null || value === undefined || String(value).trim() === '';
 
     return (
-        <div onClick={() => setEditing(true)} className={`w-full h-full cursor-pointer whitespace-pre-wrap flex items-center justify-${align === 'center' ? 'center' : align === 'right' ? 'end' : 'start'}`}>
+        <div onClick={() => setEditing(true)} className={`w-full h-full cursor-pointer whitespace-pre-wrap ${isEmpty ? '' : `text-${align}`}`}>
             {isEmpty
                 ? <span className="text-gray-400 dark:text-gray-600 italic">空</span> 
                 : String(value)}
@@ -280,21 +297,17 @@ const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, imagePrev
 const parseDateStringToLocal = (dateStr: string | null | undefined): Date | null => {
     if (!dateStr) return null;
     
-    // Try to match YYYY-MM-DD or YYYY/M/D formats, which are common.
     const match = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (match) {
         const year = parseInt(match[1], 10);
         const month = parseInt(match[2], 10) - 1; // Month is 0-indexed in JS Date
         const day = parseInt(match[3], 10);
-        // Construct with parts to ensure it's interpreted in the local timezone, avoiding UTC pitfalls.
         const d = new Date(year, month, day);
-        // Verify that the created date is valid (e.g., handles non-existent dates like Feb 30)
         if (d.getFullYear() === year && d.getMonth() === month && d.getDate() === day) {
             return d;
         }
     }
     
-    // Fallback for other potential formats (e.g., from `new Date().toString()`)
     const parsed = new Date(dateStr);
     return isNaN(parsed.getTime()) ? null : parsed;
 };
@@ -354,6 +367,167 @@ const processAllLogs = (logs: DailyLogEntry[], userInfo: UserInfo): DailyLogEntr
     });
 };
 
+const MetricItem: React.FC<{
+  icon: React.ElementType;
+  label: string;
+  value: string | number | null;
+  onSave: (value: string) => void;
+  unit?: string;
+  type?: 'text' | 'number';
+}> = ({ icon: Icon, label, value, onSave, unit, type = 'text' }) => {
+  return (
+    <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg flex items-center">
+      <Icon className="w-6 h-6 text-indigo-500 mr-3 flex-shrink-0" />
+      <div className="flex-1">
+        <label className="text-xs text-gray-500 dark:text-gray-400">{label}</label>
+        <div className="flex items-baseline">
+          <div className="text-gray-900 dark:text-white font-semibold text-lg flex-grow">
+            <EditableCell value={value} onSave={onSave} type={type} align="left" />
+          </div>
+          {unit && <span className="text-sm text-gray-400 dark:text-gray-500 ml-1">{unit}</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TextSection: React.FC<{
+  label: string;
+  value: string | null;
+  onSave: (value: string) => void;
+  icon: React.ElementType;
+}> = ({ label, value, onSave, icon: Icon }) => {
+    return (
+        <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 h-full">
+            <div className="flex items-center mb-2">
+                <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500 mr-2" />
+                <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">{label}</h4>
+            </div>
+            <div className="w-full text-gray-800 dark:text-gray-200 text-sm">
+                 <EditableCell value={value} onSave={onSave} align="left" multiline={true} />
+            </div>
+        </div>
+    );
+};
+
+const DailyLogCard: React.FC<{
+    log: DailyLogEntry;
+    isSelected: boolean;
+    isAnalyzing: boolean;
+    isDeleting: boolean;
+    onSelect: (id: string) => void;
+    onUpdate: (id: string, field: keyof DailyLogEntry, value: string) => void;
+    onUpdateMealText: (id: string, mealType: 'breakfast' | 'lunch' | 'dinner', newText: string) => void;
+    onReanalyze: (id: string) => void;
+    onDelete: (id: string) => void;
+    onConfirmDelete: (id: string) => void;
+    onCancelDelete: () => void;
+    onMealClick: (meal: MealLog) => void;
+}> = ({
+    log, isSelected, isAnalyzing, isDeleting, onSelect, onUpdate, onUpdateMealText,
+    onReanalyze, onDelete, onConfirmDelete, onCancelDelete, onMealClick
+}) => {
+    return (
+        <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-md border transition-all duration-200 ${isSelected ? 'border-indigo-500 shadow-indigo-200/50 dark:shadow-indigo-800/50' : 'border-transparent'}`}>
+            {/* Card Header */}
+            <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center">
+                    <input
+                        type="checkbox"
+                        className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-gray-100 dark:bg-gray-900"
+                        checked={isSelected}
+                        onChange={() => onSelect(log.id)}
+                        aria-label={`Select log for date ${log.date}`}
+                    />
+                    <div className="ml-4">
+                        <EditableCell 
+                           value={log.date}
+                           onSave={(value) => onUpdate(log.id, 'date', value)}
+                           align="left"
+                        />
+                    </div>
+                </div>
+                <div className="flex items-center gap-x-1">
+                    {isDeleting ? (
+                        <>
+                            <button onClick={() => onConfirmDelete(log.id)} title="确认删除" className="p-1.5 rounded-full text-green-500 hover:bg-green-100 dark:hover:bg-gray-700 transition-colors">
+                                <CheckIcon className="w-5 h-5"/>
+                            </button>
+                            <button onClick={onCancelDelete} title="取消" className="p-1.5 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-gray-700 transition-colors">
+                                <XIcon className="w-5 h-5"/>
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button 
+                                onClick={() => onReanalyze(log.id)} 
+                                title="重新分析营养和消耗" 
+                                disabled={isAnalyzing}
+                                className="p-1.5 rounded-full text-indigo-500 hover:bg-indigo-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                <SparklesIcon className={`w-5 h-5 ${isAnalyzing ? 'animate-spin' : ''}`}/>
+                            </button>
+                            <button onClick={() => onDelete(log.id)} title="删除记录" className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-gray-700 transition-colors">
+                                <TrashIcon className="w-5 h-5"/>
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Card Body */}
+            <div className="p-4 space-y-4">
+                {/* Key Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <MetricItem icon={ScaleIcon} label="体重" unit="kg" type="number" value={log.weightKg} onSave={(v) => onUpdate(log.id, 'weightKg', v)} />
+                    <MetricItem icon={TargetIcon} label="腰围" unit="cm" type="number" value={log.waistCm} onSave={(v) => onUpdate(log.id, 'waistCm', v)} />
+                    <MetricItem icon={WaterDropIcon} label="饮水" unit="L" type="number" value={log.waterL} onSave={(v) => onUpdate(log.id, 'waterL', v)} />
+                    <MetricItem icon={ClockIcon} label="睡眠" unit="h" type="number" value={log.sleepH} onSave={(v) => onUpdate(log.id, 'sleepH', v)} />
+                </div>
+                
+                {/* Meals */}
+                <div>
+                     <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">三餐记录</h4>
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <MealCell meal={log.breakfast} onCardClick={() => onMealClick(log.breakfast)} onTextSave={(v) => onUpdateMealText(log.id, 'breakfast', v)} />
+                        <MealCell meal={log.lunch} onCardClick={() => onMealClick(log.lunch)} onTextSave={(v) => onUpdateMealText(log.id, 'lunch', v)} />
+                        <MealCell meal={log.dinner} onCardClick={() => onMealClick(log.dinner)} onTextSave={(v) => onUpdateMealText(log.id, 'dinner', v)} />
+                    </div>
+                </div>
+
+                {/* Activity & Summary */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <TextSection label="运动情况" icon={ActivityIcon} value={log.activity} onSave={(v) => onUpdate(log.id, 'activity', v)} />
+                    <TextSection label="当日小结" icon={ClipboardDocumentListIcon} value={log.summary} onSave={(v) => onUpdate(log.id, 'summary', v)} />
+                </div>
+
+                {/* Analysis Details */}
+                <details className="group pt-2">
+                    <summary className="cursor-pointer text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center">
+                        详细营养分析
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                    </summary>
+                     <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <MetricItem icon={FireIcon} label="运动消耗" unit="kcal" type="number" value={log.estimatedExpenditure} onSave={(v) => onUpdate(log.id, 'estimatedExpenditure', v)} />
+                            <MetricItem icon={SparklesIcon} label="基础代谢" unit="kcal" type="number" value={log.bmr} onSave={(v) => onUpdate(log.id, 'bmr', v)} />
+                            <MetricItem icon={SparklesIcon} label="总消耗" unit="kcal" type="number" value={log.tdee} onSave={(v) => onUpdate(log.id, 'tdee', v)} />
+                            <MetricItem icon={FireIcon} label="摄入热量" unit="kcal" type="number" value={log.actualIntake} onSave={(v) => onUpdate(log.id, 'actualIntake', v)} />
+                            <MetricItem icon={SparklesIcon} label="热量缺口" unit="kcal" type="number" value={log.calorieDeficit} onSave={(v) => onUpdate(log.id, 'calorieDeficit', v)} />
+                            <MetricItem icon={SparklesIcon} label="蛋白质" unit="g" type="number" value={log.proteinG} onSave={(v) => onUpdate(log.id, 'proteinG', v)} />
+                            <MetricItem icon={SparklesIcon} label="碳水" unit="g" type="number" value={log.carbsG} onSave={(v) => onUpdate(log.id, 'carbsG', v)} />
+                            <MetricItem icon={SparklesIcon} label="脂肪" unit="g" type="number" value={log.fatG} onSave={(v) => onUpdate(log.id, 'fatG', v)} />
+                        </div>
+                    </div>
+                </details>
+
+            </div>
+        </div>
+    );
+};
+
 
 export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCurrentPage, onApiKeyMissing }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -378,29 +552,6 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
       window.removeEventListener('keydown', handleEsc);
     };
   }, []);
-
-  const calculatedColumns: (keyof DailyLogEntry)[] = ['bmr', 'tdee', 'estimatedExpenditure', 'actualIntake', 'proteinG', 'carbsG', 'fatG', 'calorieDeficit'];
-
-  const tableColumns: { key: keyof Omit<DailyLogEntry, 'id'>, header: string, type: 'text' | 'number', width: string, align: 'left' | 'right' | 'center' }[] = [
-      { key: 'date', header: '日期', type: 'text', width: 'w-36', align: 'left' },
-      { key: 'weightKg', header: '体重 (kg)', type: 'number', width: 'w-24', align: 'right' },
-      { key: 'waistCm', header: '腰围 (cm)', type: 'number', width: 'w-24', align: 'right' },
-      { key: 'waterL', header: '饮水 (L)', type: 'number', width: 'w-24', align: 'right' },
-      { key: 'sleepH', header: '睡眠 (h)', type: 'number', width: 'w-24', align: 'right' },
-      { key: 'breakfast', header: '早餐', type: 'text', width: 'w-60', align: 'left' },
-      { key: 'lunch', header: '午餐', type: 'text', width: 'w-60', align: 'left' },
-      { key: 'dinner', header: '晚餐', type: 'text', width: 'w-60', align: 'left' },
-      { key: 'activity', header: '运动情况', type: 'text', width: 'w-60', align: 'left' },
-      { key: 'estimatedExpenditure', header: '运动消耗 (kcal)', type: 'number', width: 'w-28', align: 'right' },
-      { key: 'bmr', header: '基础代谢 (kcal)', type: 'number', width: 'w-28', align: 'right' },
-      { key: 'tdee', header: '预估总消耗 (kcal)', type: 'number', width: 'w-28', align: 'right' },
-      { key: 'actualIntake', header: '实际摄入 (kcal)', type: 'number', width: 'w-28', align: 'right' },
-      { key: 'proteinG', header: '蛋白 (g)', type: 'number', width: 'w-24', align: 'right' },
-      { key: 'carbsG', header: '碳水 (g)', type: 'number', width: 'w-24', align: 'right' },
-      { key: 'fatG', header: '脂肪 (g)', type: 'number', width: 'w-24', align: 'right' },
-      { key: 'calorieDeficit', header: '热量缺口 (kcal)', type: 'number', width: 'w-28', align: 'right' },
-      { key: 'summary', header: '当日小结', type: 'text', width: 'w-64', align: 'left' },
-  ];
 
   const sortedLogs = useMemo(() => {
     return [...logs].sort((a, b) => {
@@ -497,7 +648,7 @@ const createNewLogEntry = (dateStr: string): DailyLogEntry => ({
     setLogs(prevLogs => {
       const updatedLogs = prevLogs.map(log => {
         if (log.id === id) {
-          const numericFields: (keyof DailyLogEntry)[] = ['weightKg', 'waistCm', 'waterL', 'sleepH', 'estimatedExpenditure', 'actualIntake', 'proteinG', 'carbsG', 'fatG'];
+          const numericFields: (keyof DailyLogEntry)[] = ['weightKg', 'waistCm', 'waterL', 'sleepH', 'estimatedExpenditure', 'actualIntake', 'proteinG', 'carbsG', 'fatG', 'bmr', 'tdee', 'calorieDeficit'];
           const isNumeric = numericFields.includes(field);
           
           let updatedLog = { ...log };
@@ -514,6 +665,7 @@ const createNewLogEntry = (dateStr: string): DailyLogEntry => ({
         }
         return log;
       });
+      // For date changes, we might need to re-sort, but processing handles weights correctly.
       return processAllLogs(updatedLogs, userInfo);
     });
   };
@@ -553,14 +705,9 @@ const createNewLogEntry = (dateStr: string): DailyLogEntry => ({
     setLogs(prev => processAllLogs([newLog, ...prev], userInfo));
   }
 
-  const handleDeleteRow = (id: string) => {
-    setIsConfirmingClear(false);
-    if (deletingId === id) {
-        setLogs(prev => prev.filter(log => log.id !== id));
-        setDeletingId(null);
-    } else {
-        setDeletingId(id);
-    }
+  const handleConfirmDeleteRow = (id: string) => {
+    setLogs(prev => prev.filter(log => log.id !== id));
+    setDeletingId(null);
   };
 
   const handleReanalyzeRow = async (logId: string) => {
@@ -868,33 +1015,62 @@ const createNewLogEntry = (dateStr: string): DailyLogEntry => ({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">每日记录</h1>
-              <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">追踪您的进展。点击单元格即可编辑。</p>
+              <p className="mt-2 text-lg text-gray-600 dark:text-gray-400">以卡片形式浏览您的每日进展。</p>
             </div>
             <div className="flex flex-wrap gap-2 items-center justify-start sm:justify-end">
-                {selectedIds.size > 0 && (
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleBatchAnalyzeSelected}
-                            disabled={isBatchAnalyzing}
-                            className="inline-flex items-center px-4 py-2 border border-indigo-500 shadow-sm text-sm font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50 dark:bg-gray-800 dark:text-indigo-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-wait"
-                        >
-                            <SparklesIcon className={`w-5 h-5 mr-2 ${isBatchAnalyzing ? 'animate-spin' : ''}`} />
-                            {isBatchAnalyzing ? `分析中...` : `批量分析 (${selectedIds.size})`}
-                        </button>
-                        <button
-                            onClick={handleDeleteSelected}
-                            className="inline-flex items-center px-4 py-2 border border-red-500 shadow-sm text-sm font-medium rounded-md text-red-600 bg-white hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                        >
-                            批量删除 ({selectedIds.size})
-                        </button>
-                    </div>
-                )}
-                
+                <button onClick={handleAddRow} className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    添加今日记录
+                </button>
+            </div>
+        </div>
+
+        <div className="my-8">
+            <SmartLogInput onMealLogged={handleMealLogged} onApiKeyMissing={onApiKeyMissing} />
+        </div>
+
+        {/* Action Bar for selections */}
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center">
+                <input
+                    id="select-all-checkbox"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < sortedLogs.length; }}
+                    checked={sortedLogs.length > 0 && selectedIds.size === sortedLogs.length}
+                    onChange={handleSelectAll}
+                    aria-label="Select all logs"
+                />
+                <label htmlFor="select-all-checkbox" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                   {selectedIds.size > 0 ? `已选择 ${selectedIds.size} 项` : '全选'}
+                </label>
+            </div>
+            
+            {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleBatchAnalyzeSelected}
+                        disabled={isBatchAnalyzing}
+                        className="inline-flex items-center px-3 py-1.5 border border-indigo-500 shadow-sm text-sm font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50 dark:bg-gray-800 dark:text-indigo-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                    >
+                        <SparklesIcon className={`w-4 h-4 mr-2 ${isBatchAnalyzing ? 'animate-spin' : ''}`} />
+                        {isBatchAnalyzing ? `分析中...` : `批量分析`}
+                    </button>
+                    <button
+                        onClick={handleDeleteSelected}
+                        className="inline-flex items-center px-3 py-1.5 border border-red-500 shadow-sm text-sm font-medium rounded-md text-red-600 bg-white hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                    >
+                        <TrashIcon className="w-4 h-4 mr-2" />
+                        删除所选
+                    </button>
+                </div>
+            )}
+             <div className="flex-grow"></div>
+             <div className="flex flex-wrap gap-2 items-center justify-start sm:justify-end">
                 {!isConfirmingClear ? (
                     <button 
                         onClick={() => setIsConfirmingClear(true)}
                         disabled={logs.length === 0}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                         一键清空
                     </button>
@@ -906,120 +1082,42 @@ const createNewLogEntry = (dateStr: string): DailyLogEntry => ({
                     </div>
                 )}
 
-                <button onClick={() => fileInputRef.current?.click()} className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    <UploadIcon className="h-5 w-5 mr-2" />
+                <button onClick={() => fileInputRef.current?.click()} className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <UploadIcon className="h-4 w-4 mr-2" />
                     导入CSV
                 </button>
                 <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".csv,text/csv" className="hidden" />
-                <button onClick={handleAddRow} className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    添加记录
-                </button>
             </div>
-        </div>
-        
-        <div className="my-8">
-            <SmartLogInput onMealLogged={handleMealLogged} onApiKeyMissing={onApiKeyMissing} />
+
         </div>
 
-        <div className="flow-root">
-            <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                    <div className="overflow-hidden shadow-lg ring-1 ring-black ring-opacity-5 rounded-xl bg-white dark:bg-gray-800">
-                        <table className="min-w-full table-fixed">
-                            <thead className="bg-gray-50 dark:bg-gray-800/50">
-                                <tr>
-                                    <th scope="col" className="relative w-12 px-6 sm:w-16 sm:px-8">
-                                        <input
-                                            type="checkbox"
-                                            className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-transparent"
-                                            ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < sortedLogs.length; }}
-                                            checked={sortedLogs.length > 0 && selectedIds.size === sortedLogs.length}
-                                            onChange={handleSelectAll}
-                                            aria-label="Select all logs"
-                                        />
-                                    </th>
-                                    {tableColumns.map(col => <th key={col.key} scope="col" className={`py-4 px-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider ${col.width}`}>{col.header}</th>)}
-                                    <th scope="col" className="py-4 px-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                {sortedLogs.length > 0 ? sortedLogs.map(log => (
-                                    <tr key={log.id} className={`transition-colors duration-150 ease-in-out ${selectedIds.has(log.id) ? "bg-indigo-50 dark:bg-indigo-900/30" : "hover:bg-gray-50/50 dark:hover:bg-gray-900/20"}`}>
-                                        <td className="relative w-12 px-6 sm:w-16 sm:px-8 align-top py-3">
-                                            {selectedIds.has(log.id) && <div className="absolute inset-y-0 left-0 w-0.5 bg-indigo-600"></div>}
-                                            <input
-                                                type="checkbox"
-                                                className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-transparent"
-                                                checked={selectedIds.has(log.id)}
-                                                onChange={() => handleSelect(log.id)}
-                                                aria-label={`Select log for date ${log.date}`}
-                                            />
-                                        </td>
-                                        {tableColumns.map(col => (
-                                            <td key={`${log.id}-${col.key}`} className={`px-2 py-3 text-sm text-gray-700 dark:text-gray-300 align-top text-center ${calculatedColumns.includes(col.key) ? 'bg-gray-50/30 dark:bg-gray-900/30' : ''}`}>
-                                                { (col.key === 'breakfast' || col.key === 'lunch' || col.key === 'dinner') ? (
-                                                    <MealCell 
-                                                        meal={log[col.key as 'breakfast' | 'lunch' | 'dinner']}
-                                                        onTextSave={(value) => handleUpdateMealText(log.id, col.key as 'breakfast' | 'lunch' | 'dinner', value)}
-                                                        onCardClick={() => setModalMeal(log[col.key as 'breakfast' | 'lunch' | 'dinner'])}
-                                                    />
-                                                ) : (
-                                                    <div className="p-2 min-h-[3.5rem] flex items-center">
-                                                        <EditableCell
-                                                            value={log[col.key]}
-                                                            type={col.type}
-                                                            align={col.align}
-                                                            onSave={(value) => handleUpdate(log.id, col.key, value)}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </td>
-                                        ))}
-                                        <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-500 align-middle text-center">
-                                            <div className="flex items-center justify-center gap-x-1">
-                                                {deletingId === log.id ? (
-                                                    <>
-                                                        <button onClick={() => handleDeleteRow(log.id)} title="确认删除" className="p-1.5 rounded-full text-green-500 hover:bg-green-100 dark:hover:bg-gray-700 transition-colors">
-                                                            <CheckIcon className="w-5 h-5"/>
-                                                        </button>
-                                                        <button onClick={() => setDeletingId(null)} title="取消" className="p-1.5 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-gray-700 transition-colors">
-                                                            <XIcon className="w-5 h-5"/>
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <button 
-                                                            onClick={() => handleReanalyzeRow(log.id)} 
-                                                            title="重新分析营养和消耗" 
-                                                            disabled={analyzingIds.has(log.id)}
-                                                            className="p-1.5 rounded-full text-indigo-500 hover:bg-indigo-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                                        >
-                                                            <SparklesIcon className={`w-5 h-5 ${analyzingIds.has(log.id) ? 'animate-spin' : ''}`}/>
-                                                        </button>
-                                                        <button onClick={() => handleDeleteRow(log.id)} title="删除记录" className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-gray-700 transition-colors">
-                                                            <TrashIcon className="w-5 h-5"/>
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )) : (
-                                    <tr>
-                                      <td colSpan={tableColumns.length + 2} className="text-center py-16 text-gray-500 dark:text-gray-400">
-                                        <div className="flex flex-col items-center">
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                          <p className="mt-2 font-semibold">暂无记录</p>
-                                          <p className="mt-1 text-sm">点击 "添加记录" 或 "导入CSV" 开始吧！</p>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+        {/* Card List */}
+        <div className="space-y-6">
+            {sortedLogs.length > 0 ? sortedLogs.map(log => (
+                <DailyLogCard 
+                    key={log.id}
+                    log={log}
+                    isSelected={selectedIds.has(log.id)}
+                    isAnalyzing={analyzingIds.has(log.id)}
+                    isDeleting={deletingId === log.id}
+                    onSelect={handleSelect}
+                    onUpdate={handleUpdate}
+                    onUpdateMealText={handleUpdateMealText}
+                    onReanalyze={handleReanalyzeRow}
+                    onDelete={(id) => setDeletingId(id)}
+                    onConfirmDelete={handleConfirmDeleteRow}
+                    onCancelDelete={() => setDeletingId(null)}
+                    onMealClick={setModalMeal}
+                />
+            )) : (
+                <div className="text-center py-16 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow">
+                  <div className="flex flex-col items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    <p className="mt-2 font-semibold">暂无记录</p>
+                    <p className="mt-1 text-sm">点击 "添加今日记录" 或使用 "AI 智能膳食日志" 开始吧！</p>
+                  </div>
                 </div>
-            </div>
+            )}
         </div>
       </div>
     </div>
