@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ChatMessage } from '../types';
 import { sendChatMessageStream } from '../services/geminiService';
-import { SendIcon, CameraIcon, UserIcon } from './Icons';
+import { SendIcon, CameraIcon, UserIcon, XIcon } from './Icons';
 
 // A markdown to HTML converter for chat messages
 const renderMarkdown = (text: string) => {
@@ -138,7 +138,7 @@ const ChatMessageDisplay: React.FC<{ message: ChatMessage }> = ({ message }) => 
   );
 };
 
-export const ChatInterface: React.FC = () => {
+export const ChatInterface: React.FC<{ onApiKeyMissing: () => void }> = ({ onApiKeyMissing }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [image, setImage] = useState<File | null>(null);
@@ -196,32 +196,28 @@ export const ChatInterface: React.FC = () => {
       // Pass the history *before* the new user message was added
       const historyForApi = messages.slice(1);
       const stream = await sendChatMessageStream(historyForApi, currentInput, currentImage);
-
-      if (!stream) {
-          throw new Error("Failed to get response stream from the server.");
-      }
-      
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
       
       let modelResponse = '';
       const modelMessageId = `model-${Date.now()}`;
       setMessages(prev => [...prev, { id: modelMessageId, role: 'model', text: '...' }]);
 
-      while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          modelResponse += decoder.decode(value, { stream: true });
+      for await (const chunk of stream) {
+          modelResponse += chunk.text;
           setMessages(prev => prev.map(m => m.id === modelMessageId ? { ...m, text: modelResponse } : m));
       }
 
     } catch (error) {
       console.error("Error sending message:", error);
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'model', text: `抱歉，我遇到了一个错误: ${error instanceof Error ? error.message : 'Unknown error'}` }]);
+      let errorMessage = `抱歉，我遇到了一个错误: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      if (error instanceof Error && error.message.includes('API_KEY_MISSING')) {
+          onApiKeyMissing();
+          errorMessage = "AI功能未激活。请先前往“设置”页面配置您的API密钥，然后重试。";
+      }
+      setMessages(prev => [...prev.filter(m => m.text !== '...'), { id: `err-${Date.now()}`, role: 'model', text: errorMessage }]);
     } finally {
       setIsLoading(false);
     }
-  }, [input, image, imagePreview, isLoading, messages]);
+  }, [input, image, imagePreview, isLoading, messages, onApiKeyMissing]);
 
   return (
     <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900">

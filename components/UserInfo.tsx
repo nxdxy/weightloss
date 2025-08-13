@@ -1,10 +1,13 @@
 
 import React from 'react';
-import type { UserInfo } from '../types';
+import type { UserInfo, Page } from '../types';
+import { Page as PageEnum } from '../types';
+
 
 interface UserInfoProps {
   userInfo: UserInfo;
   setUserInfo: React.Dispatch<React.SetStateAction<UserInfo>>;
+  setCurrentPage: React.Dispatch<React.SetStateAction<Page>>;
 }
 
 const Label: React.FC<{htmlFor: string; children: React.ReactNode}> = ({ htmlFor, children }) => (
@@ -20,11 +23,13 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) 
 );
 
 
-export const UserInfoForm: React.FC<UserInfoProps> = ({ userInfo, setUserInfo }) => {
+export const UserInfoForm: React.FC<UserInfoProps> = ({ userInfo, setUserInfo, setCurrentPage }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setUserInfo(prev => ({ ...prev, [name]: value ? Number(value) || value : null }));
   };
+
+  const isFormComplete = userInfo.age && userInfo.gender && userInfo.height;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -69,8 +74,19 @@ export const UserInfoForm: React.FC<UserInfoProps> = ({ userInfo, setUserInfo })
                         </Select>
                     </div>
                 </form>
-                <div className="mt-8 text-xs text-gray-500 dark:text-gray-400 text-center">
-                  <p>您的信息会自动保存在浏览器中。</p>
+                <div className="mt-8 text-center">
+                    <button
+                        onClick={() => setCurrentPage(PageEnum.LOG)}
+                        disabled={!isFormComplete}
+                        className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 border border-transparent shadow-sm text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                    >
+                        下一步：开始记录
+                    </button>
+                    {!isFormComplete && (
+                        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                            请填写年龄、性别和身高以继续。您的信息会自动保存。
+                        </p>
+                    )}
                 </div>
             </div>
         </div>

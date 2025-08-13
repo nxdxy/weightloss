@@ -41,6 +41,8 @@ export enum Page {
   CHAT = 'Chat',
   LOG = 'Log',
   REPORT = 'Report',
+  SETTINGS = 'Settings',
+  FOOD_KNOWLEDGE = '饮食知识库',
 }
 
 export interface WeeklySummary {
@@ -55,8 +57,8 @@ export interface AnalysisReportData {
     totalWeightLoss: number;
     avgWeeklyLoss: number;
     avgCalorieDeficit: number;
-    totalWaistReduction: number; // New
-    avgActivityExpenditure: number; // New
+    totalWaistReduction: number;
+    avgActivityExpenditure: number;
   };
   consistency: {
     logStreak: number;
@@ -67,7 +69,7 @@ export interface AnalysisReportData {
     avgHours: number;
     correlationComment: string;
   };
-  hydrationAnalysis: { // New
+  hydrationAnalysis: {
       avgWaterL: number;
       comment: string;
   };
@@ -75,7 +77,7 @@ export interface AnalysisReportData {
     overall: string;
     positive: string;
     improvement: string;
-    macroDistribution: { // New
+    macroDistribution: {
         proteinPercentage: number;
         carbsPercentage: number;
         fatPercentage: number;
@@ -83,8 +85,20 @@ export interface AnalysisReportData {
     }
   };
   achievements: string[];
-  suggestions: string[];
+  actionableTips: string[]; // Renamed from suggestions
+  // NEW FIELDS FOR ENHANCED REPORT
+  recommendedSuperfoods: {
+      food: string;
+      reason: string;
+  }[];
+  exercisePrescription: {
+      recommendation: string;
+      details: string[];
+  };
+  potentialRisks: string[];
+  weeklyOutlook: string;
 }
+
 
 export interface StoredAnalysisReport {
   data: AnalysisReportData | null;

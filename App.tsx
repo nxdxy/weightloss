@@ -2,11 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import type { UserInfo, DailyLogEntry, StoredAnalysisReport } from './types';
 import { Page } from './types';
-import { UserIcon, ChatIcon, TableIcon, ChartIcon, MenuIcon, XIcon } from './components/Icons';
+import { UserIcon, ChatIcon, TableIcon, ChartIcon, MenuIcon, XIcon, SettingsIcon, BookOpenIcon } from './components/Icons';
 import { UserInfoForm } from './components/UserInfo';
 import { DataLog } from './components/DataLog';
 import { AnalysisReport } from './components/AnalysisReport';
 import { ChatInterface } from './components/Chat';
+import { SettingsPage } from './components/Settings';
+import { FoodKnowledgeBase } from './components/FoodRecommendations';
 
 const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolean; onClick: () => void; }> = ({ icon, label, isActive, onClick }) => {
     return (
@@ -28,7 +30,10 @@ const NavItem: React.FC<{ icon: React.ReactNode; label: string; isActive: boolea
 
 
 const App: React.FC = () => {
-    const [currentPage, setCurrentPage] = useState<Page>(Page.PROFILE);
+    const [currentPage, setCurrentPage] = useState<Page>(() => {
+        const apiKey = localStorage.getItem('gemini-api-key');
+        return apiKey ? Page.PROFILE : Page.SETTINGS;
+    });
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     
     // User Info State
@@ -99,18 +104,28 @@ const App: React.FC = () => {
     }, [analysisReport]);
 
 
+    // Centralized handler for API key errors
+    const handleApiKeyError = () => {
+        alert("AI功能验证失败。请检查您的API密钥是否正确，或前往设置页面重新配置。");
+        setCurrentPage(Page.SETTINGS);
+    };
+
     const renderPage = () => {
         switch (currentPage) {
             case Page.PROFILE:
-                return <UserInfoForm userInfo={userInfo} setUserInfo={setUserInfo} />;
+                return <UserInfoForm userInfo={userInfo} setUserInfo={setUserInfo} setCurrentPage={setCurrentPage} />;
             case Page.LOG:
-                return <DataLog logs={logs} setLogs={setLogs} userInfo={userInfo} setCurrentPage={setCurrentPage} />;
+                return <DataLog logs={logs} setLogs={setLogs} userInfo={userInfo} setCurrentPage={setCurrentPage} onApiKeyMissing={handleApiKeyError} />;
             case Page.REPORT:
-                return <AnalysisReport logs={logs} userInfo={userInfo} setCurrentPage={setCurrentPage} analysisReport={analysisReport} setAnalysisReport={setAnalysisReport} />;
+                return <AnalysisReport logs={logs} userInfo={userInfo} setCurrentPage={setCurrentPage} analysisReport={analysisReport} setAnalysisReport={setAnalysisReport} onApiKeyMissing={handleApiKeyError} />;
             case Page.CHAT:
-                return <ChatInterface />;
+                return <ChatInterface onApiKeyMissing={handleApiKeyError} />;
+            case Page.FOOD_KNOWLEDGE:
+                return <FoodKnowledgeBase />;
+            case Page.SETTINGS:
+                return <SettingsPage />;
             default:
-                return <UserInfoForm userInfo={userInfo} setUserInfo={setUserInfo} />;
+                return <UserInfoForm userInfo={userInfo} setUserInfo={setUserInfo} setCurrentPage={setCurrentPage} />;
         }
     };
     
@@ -118,7 +133,12 @@ const App: React.FC = () => {
       { page: Page.PROFILE, icon: <UserIcon className="w-6 h-6" />, label: '个人资料' },
       { page: Page.CHAT, icon: <ChatIcon className="w-6 h-6" />, label: 'AI聊天' },
       { page: Page.LOG, icon: <TableIcon className="w-6 h-6" />, label: '每日记录' },
-      { page: Page.REPORT, icon: <ChartIcon className="w-6 h-6" />, label: '分析报告' }
+      { page: Page.REPORT, icon: <ChartIcon className="w-6 h-6" />, label: '分析报告' },
+      { page: Page.FOOD_KNOWLEDGE, icon: <BookOpenIcon className="w-6 h-6" />, label: '饮食知识库' },
+    ];
+
+    const bottomNavItems = [
+      { page: Page.SETTINGS, icon: <SettingsIcon className="w-6 h-6" />, label: '设置' },
     ];
 
     const handleNavItemClick = (page: Page) => {
@@ -138,18 +158,35 @@ const App: React.FC = () => {
             )}
 
             {/* Sidebar */}
-            <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-gray-800 shadow-md transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out`}>
-                <div className="flex flex-col h-full p-4">
-                    <div className="flex items-center mb-6 h-10">
+            <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-gray-800 shadow-md transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col`}>
+                <div className="flex-shrink-0">
+                    <div className="flex items-center p-4 mb-6 h-10">
                          <span className="text-3xl">💪</span>
                          <h1 className="ml-3 text-2xl font-bold text-gray-900 dark:text-white">健身伙伴</h1>
                          <button onClick={() => setIsSidebarOpen(false)} className="ml-auto md:hidden p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg" aria-label="Close sidebar">
                             <XIcon className="w-6 h-6" />
                          </button>
                     </div>
+                </div>
+                <div className="flex-grow p-4 pt-0 overflow-y-auto">
                     <nav>
                         <ul>
                           {navItems.map(item => (
+                            <NavItem
+                              key={item.page}
+                              icon={item.icon}
+                              label={item.label}
+                              isActive={currentPage === item.page}
+                              onClick={() => handleNavItemClick(item.page)}
+                            />
+                          ))}
+                        </ul>
+                    </nav>
+                </div>
+                 <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700">
+                    <nav>
+                        <ul>
+                          {bottomNavItems.map(item => (
                             <NavItem
                               key={item.page}
                               icon={item.icon}

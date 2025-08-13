@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import type { DailyLogEntry, AnalyzedMealData, FullDayAnalysisData, UserInfo, Page } from '../types';
-import { UploadIcon, SparklesIcon, CameraIcon, UserIcon } from './Icons';
+import { UploadIcon, SparklesIcon, CameraIcon, UserIcon, XIcon } from './Icons';
 import { analyzeMealInput, analyzeFullDayNutrition } from '../services/geminiService';
 import { Page as PageEnum } from '../types';
 
@@ -10,6 +10,7 @@ interface DataLogProps {
   setLogs: React.Dispatch<React.SetStateAction<DailyLogEntry[]>>;
   userInfo: UserInfo;
   setCurrentPage: React.Dispatch<React.SetStateAction<Page>>;
+  onApiKeyMissing: () => void;
 }
 
 const EditableCell: React.FC<{ value: string | number | null; onSave: (value: string) => void; type?: string, align?: 'left' | 'right' | 'center' }> = ({ value, onSave, type = 'text', align = 'left' }) => {
@@ -101,7 +102,7 @@ const parseCsvRow = (row: string): string[] => {
     return result;
 };
 
-const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, date: string, mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void }> = ({ onMealLogged }) => {
+const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, date: string, mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void; onApiKeyMissing: () => void; }> = ({ onMealLogged, onApiKeyMissing }) => {
     const [userInput, setUserInput] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [image, setImage] = useState<File | null>(null);
@@ -146,8 +147,12 @@ const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, date: str
                 alert('抱歉，无法分析您的餐食。请尝试更详细地描述，或检查您的网络连接和图片。');
             }
         } catch (error) {
-            console.error(error);
-            alert('分析时发生错误。');
+            if (error instanceof Error && error.message.includes('API_KEY_MISSING')) {
+                onApiKeyMissing();
+            } else {
+                console.error(error);
+                alert('分析时发生错误，请检查您的API密钥或网络连接。');
+            }
         } finally {
             setIsAnalyzing(false);
         }
@@ -316,7 +321,7 @@ const processAllLogs = (logs: DailyLogEntry[], userInfo: UserInfo): DailyLogEntr
 };
 
 
-export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCurrentPage }) => {
+export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCurrentPage, onApiKeyMissing }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
@@ -510,8 +515,12 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
             alert("无法重新分析营养数据，请稍后再试。");
         }
     } catch(e) {
-        console.error(e);
-        alert("重新分析时发生错误。");
+        if (e instanceof Error && e.message.includes('API_KEY_MISSING')) {
+            onApiKeyMissing();
+        } else {
+            console.error(e);
+            alert("重新分析时发生错误，请检查您的API密钥或网络连接。");
+        }
     } finally {
         setAnalyzingIds(prev => {
             const newSet = new Set(prev);
@@ -529,14 +538,29 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
     setAnalyzingIds(currentAnalyzingIds); 
 
     const logsToAnalyze = logs.filter(l => selectedIds.has(l.id));
+    let hasApiKeyError = false;
 
     const analysisPromises = logsToAnalyze.map(log =>
         analyzeFullDayNutrition(log)
             .then(result => ({ id: log.id, status: 'fulfilled' as const, value: result }))
-            .catch(error => ({ id: log.id, status: 'rejected' as const, reason: error }))
+            .catch(error => {
+                if (error instanceof Error && error.message.includes('API_KEY_MISSING')) {
+                    hasApiKeyError = true;
+                }
+                return ({ id: log.id, status: 'rejected' as const, reason: error });
+            })
     );
 
     const results = await Promise.all(analysisPromises);
+    
+    if (hasApiKeyError) {
+        onApiKeyMissing();
+        setIsBatchAnalyzing(false);
+        setAnalyzingIds(new Set());
+        setSelectedIds(new Set());
+        return;
+    }
+
 
     let successfulAnalyses = 0;
     const updates = new Map<string, Partial<DailyLogEntry>>();
@@ -820,7 +844,7 @@ export const DataLog: React.FC<DataLogProps> = ({ logs, setLogs, userInfo, setCu
         </div>
         
         <div className="my-8">
-            <SmartLogInput onMealLogged={handleMealLogged} />
+            <SmartLogInput onMealLogged={handleMealLogged} onApiKeyMissing={onApiKeyMissing} />
         </div>
 
         <div className="flow-root">

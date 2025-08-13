@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
 import { generateAnalysisReport } from '../services/geminiService';
 import type { DailyLogEntry, UserInfo, StoredAnalysisReport, Page } from '../types';
-import { LightbulbIcon, TargetIcon, SparklesIcon, NutritionIcon, MoonIcon, ChartIcon, TrophyIcon, ActivityIcon, WaterDropIcon, UserIcon, RefreshIcon } from './Icons';
+import { LightbulbIcon, TargetIcon, SparklesIcon, NutritionIcon, MoonIcon, ChartIcon, TrophyIcon, ActivityIcon, WaterDropIcon, UserIcon, RefreshIcon, ClipboardListIcon, FireIcon, ExclamationTriangleIcon } from './Icons';
 import { Page as PageEnum } from '../types';
 
 interface AnalysisReportProps {
@@ -12,6 +12,7 @@ interface AnalysisReportProps {
   setCurrentPage: React.Dispatch<React.SetStateAction<Page>>;
   analysisReport: StoredAnalysisReport;
   setAnalysisReport: React.Dispatch<React.SetStateAction<StoredAnalysisReport>>;
+  onApiKeyMissing: () => void;
 }
 
 const Gauge = ({ value, label }: { value: number; label: string }) => {
@@ -68,7 +69,7 @@ const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ tit
 );
 
 const InsightCard: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode; }> = ({ title, icon, children }) => (
-  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-6 h-full border border-gray-200 dark:border-gray-700">
+  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700 h-full">
     <div className="flex items-center mb-3">
       <div className="text-indigo-500">{icon}</div>
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white ml-3">{title}</h3>
@@ -120,7 +121,7 @@ const MacroDistributionChart = ({ data }: { data: { name: string; value: number;
     );
 };
 
-export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, setCurrentPage, analysisReport, setAnalysisReport }) => {
+export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, setCurrentPage, analysisReport, setAnalysisReport, onApiKeyMissing }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -174,8 +175,13 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
         setError("无法生成报告。AI服务可能暂时不可用或返回了无效数据，请稍后再试。");
       }
     } catch (e) {
-      console.error(e);
-      setError("生成报告时发生未知错误。");
+      if (e instanceof Error && e.message.includes('API_KEY_MISSING')) {
+          onApiKeyMissing();
+          setError("API密钥无效或缺失。请前往设置页面进行配置。");
+      } else {
+        console.error(e);
+        setError("生成报告时发生未知错误。请检查您的网络连接或API密钥。");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -196,7 +202,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
                 AI教练将深入分析您的所有记录，提供关于进展、营养、睡眠等方面的专业见解。
               </p>
               {error && <p className="text-red-500 dark:text-red-400 font-medium mt-4">{error}</p>}
-              {isProfileIncomplete && (
+              {isProfileIncomplete && !error && (
                 <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 rounded-md text-sm">
                     请先前往“个人资料”页面填写您的年龄、性别和身高。
                 </div>
@@ -308,35 +314,65 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
 
             {/* Section 3: AI Insights */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-8">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI 智能洞察</h2>
-                <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        <InsightCard title="营养深度剖析" icon={<NutritionIcon className="w-6 h-6" />}>
-                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                                <div>
-                                    <MacroDistributionChart data={macroData} />
-                                </div>
-                                <div className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                                    <p className="font-semibold">{report.nutritionInsights.macroDistribution.comment}</p>
-                                    <div className="mt-2 text-xs space-y-1 pt-2 border-t border-gray-200 dark:border-gray-700">
-                                        <p><span className="text-green-500 font-bold">饮食亮点:</span> {report.nutritionInsights.positive}</p>
-                                        <p><span className="text-yellow-500 font-bold">改进建议:</span> {report.nutritionInsights.improvement}</p>
-                                    </div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI 深度洞察</h2>
+                 <p className="mt-2 text-md text-gray-600 dark:text-gray-400">{report.weeklyOutlook}</p>
+                
+                 {report.potentialRisks && report.potentialRisks.length > 0 && (
+                    <div className="mt-6 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-800">
+                        <div className="flex items-center">
+                            <ExclamationTriangleIcon className="w-6 h-6 text-yellow-500" />
+                            <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-300 ml-3">潜在风险与关注点</h3>
+                        </div>
+                        <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-200">
+                            <AiAnalysisList points={report.potentialRisks} />
+                        </div>
+                    </div>
+                 )}
+
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <InsightCard title="成就亮点" icon={<TrophyIcon className="w-6 h-6" />}>
+                        <AiAnalysisList points={report.achievements} />
+                    </InsightCard>
+                    <InsightCard title="核心行动建议" icon={<TargetIcon className="w-6 h-6" />}>
+                        <AiAnalysisList points={report.actionableTips} />
+                    </InsightCard>
+                </div>
+                
+                 <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <InsightCard title="个性化运动处方" icon={<ClipboardListIcon className="w-6 h-6" />}>
+                        <p className="font-semibold">{report.exercisePrescription.recommendation}</p>
+                        <ul className="list-disc list-outside pl-5 mt-2 space-y-1">
+                          {report.exercisePrescription.details.map((detail, index) => <li key={index}>{detail}</li>)}
+                        </ul>
+                    </InsightCard>
+
+                     <InsightCard title="为你推荐的超级食物" icon={<FireIcon className="w-6 h-6" />}>
+                        <div className="space-y-3">
+                        {report.recommendedSuperfoods.map((item, index) => (
+                            <div key={index}>
+                                <p className="font-semibold text-gray-800 dark:text-gray-100">{item.food}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{item.reason}</p>
+                            </div>
+                        ))}
+                        </div>
+                    </InsightCard>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 gap-6">
+                    <InsightCard title="营养深度剖析" icon={<NutritionIcon className="w-6 h-6" />}>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                            <div>
+                                <MacroDistributionChart data={macroData} />
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
+                                <p className="font-semibold">{report.nutritionInsights.macroDistribution.comment}</p>
+                                <div className="mt-2 text-xs space-y-1 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                    <p><span className="text-green-500 font-bold">饮食亮点:</span> {report.nutritionInsights.positive}</p>
+                                    <p><span className="text-yellow-500 font-bold">改进建议:</span> {report.nutritionInsights.improvement}</p>
                                 </div>
                             </div>
-                        </InsightCard>
-                         <InsightCard title="睡眠与恢复分析" icon={<MoonIcon className="w-6 h-6" />}>
-                             <p>{report.sleepAnalysis.correlationComment}</p>
-                         </InsightCard>
-                    </div>
-                     <div className="space-y-6">
-                        <InsightCard title="成就亮点" icon={<TrophyIcon className="w-6 h-6" />}>
-                            <AiAnalysisList points={report.achievements} />
-                        </InsightCard>
-                        <InsightCard title="行动建议" icon={<TargetIcon className="w-6 h-6" />}>
-                            <AiAnalysisList points={report.suggestions} />
-                        </InsightCard>
-                    </div>
+                        </div>
+                    </InsightCard>
                 </div>
             </div>
         </div>
