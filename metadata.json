@@ -1,0 +1,7 @@
+{
+  "name": "AI Fitness Pal",
+  "description": "An intelligent application to help users track their diet, exercise, and weight loss journey with AI-powered analysis and chat support.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
