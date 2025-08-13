@@ -242,7 +242,7 @@ const SmartLogInput: React.FC<{ onMealLogged: (data: AnalyzedMealData, imagePrev
                     placeholder="例如：午餐吃了沙拉，酱汁是分开放的...（可选，AI会以图片为准）"
                 />
                 <div className="flex-shrink-0 w-full md:w-40 flex flex-col items-center justify-center gap-2">
-                    <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleImageChange} className="hidden" />
+                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageChange} className="hidden" />
                     {!imagePreview ? (
                         <button
                             type="button"
