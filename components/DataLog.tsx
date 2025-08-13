@@ -79,27 +79,24 @@ const MealCell: React.FC<{
     const hasAnalysis = meal.analysis && Object.keys(meal.analysis).length > 0;
     return (
         <div 
-            className="bg-white dark:bg-gray-800/50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden min-w-[200px] max-w-xs cursor-pointer hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all duration-200"
+            className="bg-white dark:bg-gray-800/50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all duration-200 flex items-stretch h-full min-h-[4rem]"
             onClick={onCardClick}
         >
-            {meal.image ? (
-                 <div className="aspect-video w-full bg-gray-100 dark:bg-gray-700 relative">
+            {meal.image && (
+                 <div className="w-16 flex-shrink-0 bg-gray-100 dark:bg-gray-700 relative">
                     <img 
                         src={meal.image} 
                         alt="Meal photo" 
                         className="w-full h-full object-cover" 
                     />
                     {hasAnalysis && (
-                         <div className="absolute bottom-1 right-1 bg-indigo-500 text-white text-xs px-2 py-0.5 rounded-full flex items-center shadow">
-                            <SparklesIcon className="w-3 h-3 mr-1" />
-                            <span>详细分析</span>
+                         <div className="absolute bottom-1 right-1 bg-indigo-500 text-white p-1 rounded-full flex items-center shadow">
+                            <SparklesIcon className="w-2.5 h-2.5" />
                         </div>
                     )}
                 </div>
-            ) : (
-                <div className="h-4 bg-gray-50 dark:bg-gray-800"></div>
             )}
-            <div className={`p-2 text-left`}>
+            <div className="p-2 text-left flex-grow flex items-center">
                 <EditableCell value={meal.text} onSave={onTextSave} align="left" />
             </div>
         </div>
