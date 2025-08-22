@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8889:8889"
+    environment:
+      - DATABASE_URL=sqlite:///./fitness_pal.db
+      - SECRET_KEY=your-production-secret-key-change-this
+      - DEBUG=False
+      - ALLOWED_ORIGINS=http://localhost:8888,http://localhost:5173,http://localhost:3000
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/fitness_pal.db:/app/fitness_pal.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:8889
+    ports:
+      - "8888:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Database (Optional PostgreSQL for production)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: fitness_pal
+  #     POSTGRES_USER: fitness_user
+  #     POSTGRES_PASSWORD: fitness_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+
+# volumes:
+#   postgres_data:

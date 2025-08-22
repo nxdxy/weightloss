@@ -123,6 +123,10 @@ export interface AnalyzedMealData {
   identifiedIngredients: string[]; // ["鸡胸肉", "生菜", "圣女果", "黄瓜", "杏仁"]
   dominantColors: string[]; // ["绿色", "白色", "红色"]
   cuisineStyle: string; // "西式简餐"
+  // Fat loss analysis fields
+  fatLossRating?: number; // 1-10 rating for fat loss suitability
+  fatLossAnalysis?: string; // Professional analysis from fat loss perspective
+  improvementTips?: string[]; // Specific improvement suggestions
 }
 
 

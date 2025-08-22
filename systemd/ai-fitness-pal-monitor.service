@@ -1,0 +1,15 @@
+[Unit]
+Description=AI Fitness Pal Monitor
+After=ai-fitness-pal.service
+Requires=ai-fitness-pal.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ai-fitness-pal
+ExecStart=/opt/ai-fitness-pal/scripts/monitoring.sh start
+Restart=always
+RestartSec=30
+User=root
+
+[Install]
+WantedBy=multi-user.target

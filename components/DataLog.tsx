@@ -92,29 +92,96 @@ const MealCell: React.FC<{
     meal: MealLog;
     onTextSave: (text: string) => void;
     onCardClick: () => void;
-}> = ({ meal, onTextSave, onCardClick }) => {
+    onImageUpload: (file: File) => void;
+}> = ({ meal, onTextSave, onCardClick, onImageUpload }) => {
     const hasAnalysis = meal.analysis && Object.keys(meal.analysis).length > 0;
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            onImageUpload(file);
+        }
+    };
+
     return (
-        <div 
-            className="bg-white dark:bg-gray-800/50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all duration-200 flex items-stretch h-full min-h-[4rem]"
-            onClick={onCardClick}
-        >
-            {meal.image && (
-                 <div className="w-16 flex-shrink-0 bg-gray-100 dark:bg-gray-700 relative">
-                    <img 
-                        src={meal.image} 
-                        alt="Meal photo" 
-                        className="w-full h-full object-cover" 
-                    />
-                    {hasAnalysis && (
-                         <div className="absolute bottom-1 right-1 bg-indigo-500 text-white p-1 rounded-full flex items-center shadow">
-                            <SparklesIcon className="w-2.5 h-2.5" />
+        <div className="space-y-2">
+            {/* Image Upload Area */}
+            <div className="relative">
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                />
+
+                {meal.image ? (
+                    <div className="relative group">
+                        <img
+                            src={meal.image}
+                            alt="餐食图片"
+                            className="w-full h-32 object-cover rounded-lg cursor-pointer"
+                            onClick={onCardClick}
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={onCardClick}
+                                    className="p-2 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 transition-all"
+                                    title="查看AI分析"
+                                >
+                                    <SparklesIcon className="w-4 h-4 text-indigo-600" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="p-2 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 transition-all"
+                                    title="更换图片"
+                                >
+                                    <CameraIcon className="w-4 h-4 text-gray-600" />
+                                </button>
+                            </div>
                         </div>
-                    )}
+                        {hasAnalysis && (
+                            <div className="absolute top-2 left-2 bg-indigo-500 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                                <SparklesIcon className="w-3 h-3" />
+                                已分析
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                    >
+                        <div className="flex items-center gap-2">
+                            <UploadIcon className="w-5 h-5 text-gray-400" />
+                            <CameraIcon className="w-5 h-5 text-gray-400" />
+                        </div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                            上传图片
+                        </span>
+                    </button>
+                )}
+            </div>
+
+            {/* Text Area */}
+            <div
+                className="bg-white dark:bg-gray-800/50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all duration-200 min-h-[5rem]"
+                onClick={onCardClick}
+            >
+                <div className="p-3">
+                    <EditableCell
+                        value={meal.text || ''}
+                        onSave={onTextSave}
+                        placeholder="点击添加餐食记录..."
+                        multiline={true}
+                        className="text-sm"
+                    />
                 </div>
-            )}
-            <div className="p-2 text-left flex-grow flex items-center">
-                <EditableCell value={meal.text} onSave={onTextSave} align="left" />
             </div>
         </div>
     );
@@ -489,9 +556,24 @@ const DailyLogCard: React.FC<{
                 <div>
                      <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">三餐记录</h4>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <MealCell meal={log.breakfast} onCardClick={() => onMealClick(log.breakfast)} onTextSave={(v) => onUpdateMealText(log.id, 'breakfast', v)} />
-                        <MealCell meal={log.lunch} onCardClick={() => onMealClick(log.lunch)} onTextSave={(v) => onUpdateMealText(log.id, 'lunch', v)} />
-                        <MealCell meal={log.dinner} onCardClick={() => onMealClick(log.dinner)} onTextSave={(v) => onUpdateMealText(log.id, 'dinner', v)} />
+                        <MealCell
+                            meal={log.breakfast}
+                            onCardClick={() => onMealClick(log.breakfast)}
+                            onTextSave={(v) => onUpdateMealText(log.id, 'breakfast', v)}
+                            onImageUpload={(file) => {/* TODO: 处理图片上传 */}}
+                        />
+                        <MealCell
+                            meal={log.lunch}
+                            onCardClick={() => onMealClick(log.lunch)}
+                            onTextSave={(v) => onUpdateMealText(log.id, 'lunch', v)}
+                            onImageUpload={(file) => {/* TODO: 处理图片上传 */}}
+                        />
+                        <MealCell
+                            meal={log.dinner}
+                            onCardClick={() => onMealClick(log.dinner)}
+                            onTextSave={(v) => onUpdateMealText(log.id, 'dinner', v)}
+                            onImageUpload={(file) => {/* TODO: 处理图片上传 */}}
+                        />
                     </div>
                 </div>
 

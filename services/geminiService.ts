@@ -57,9 +57,9 @@ const analysisReportSchema = {
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    week: { type: Type.STRING, description: "周的标识符，例如 '第1周' 或 '2023-10-01 ~ 2023-10-07'。" },
+                    week: { type: Type.STRING, description: "周的标识符，格式为 'YYYY-MM-DD ~ YYYY-MM-DD'。" },
                     avgWeight: { type: Type.NUMBER, description: "该周的平均体重。" },
-                    weightChange: { type: Type.NUMBER, description: "与上一周相比的体重变化（公斤），第一周为0。" },
+                    weightChange: { type: Type.NUMBER, description: "该周内的体重变化（该周最后一天体重 - 第一天体重），负数表示减重。" },
                 },
                 required: ['week', 'avgWeight', 'weightChange']
             }

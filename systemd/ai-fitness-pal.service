@@ -1,0 +1,17 @@
+[Unit]
+Description=AI Fitness Pal Application
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/ai-fitness-pal
+ExecStart=/usr/local/bin/docker-compose -f docker-compose.prod.yml up -d
+ExecStop=/usr/local/bin/docker-compose -f docker-compose.prod.yml down
+ExecReload=/usr/local/bin/docker-compose -f docker-compose.prod.yml restart
+TimeoutStartSec=0
+User=root
+
+[Install]
+WantedBy=multi-user.target

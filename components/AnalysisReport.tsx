@@ -80,9 +80,22 @@ const InsightCard: React.FC<{ title: string; icon: React.ReactNode; children: Re
   </div>
 );
 
+// Simple markdown renderer for inline formatting
+const renderInlineMarkdown = (text: string): React.ReactNode => {
+    const parts = text.split(/(\*\*.*?\*\*)/g).filter(Boolean);
+    return parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        return part;
+    });
+};
+
 const AiAnalysisList: React.FC<{ points: string[] }> = ({ points }) => (
     <ul className="space-y-2 list-disc list-outside pl-5">
-        {points.map((item, index) => <li key={index}>{item}</li>)}
+        {points.map((item, index) => (
+            <li key={index}>{renderInlineMarkdown(item)}</li>
+        ))}
     </ul>
 );
 
@@ -114,7 +127,31 @@ const MacroDistributionChart = ({ data }: { data: { name: string; value: number;
                         <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                 </Pie>
-                <Tooltip formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]} />
+                <Tooltip
+                    contentStyle={{
+                        backgroundColor: 'rgba(15, 23, 42, 0.98)',
+                        border: '2px solid #22d3ee',
+                        borderRadius: '0.75rem',
+                        color: '#ffffff !important',
+                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+                        fontSize: '14px',
+                        fontWeight: '500'
+                    }}
+                    labelStyle={{
+                        color: '#22d3ee !important',
+                        fontSize: '16px',
+                        fontWeight: 'bold'
+                    }}
+                    itemStyle={{
+                        color: '#ffffff !important',
+                        fontSize: '14px',
+                        fontWeight: '500'
+                    }}
+                    formatter={(value, name) => [
+                        <span style={{ color: '#ffffff' }}>{`${Number(value).toFixed(1)}%`}</span>,
+                        <span style={{ color: '#22d3ee' }}>{name}</span>
+                    ]}
+                />
                 <Legend iconSize={10} />
             </PieChart>
         </ResponsiveContainer>
@@ -127,7 +164,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
 
   const sortedLogs = useMemo(() => [...logs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [logs]);
 
-  const { weightDomain, waistDomain } = useMemo(() => {
+  const { weightDomain, waistDomain, weeklyWeightDomain } = useMemo(() => {
     const weights = sortedLogs.map(l => l.weightKg).filter((v): v is number => v !== null && v > 0);
     const waists = sortedLogs.map(l => l.waistCm).filter((v): v is number => v !== null && v > 0);
 
@@ -142,11 +179,39 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
         return [lowerBound, upperBound];
     };
 
+    // Calculate weekly weight change domain for better visualization
+    let weeklyWeightDomain: [number, number] | ['auto', 'auto'] = ['auto', 'auto'];
+    if (report?.weeklySummary) {
+      const weeklyChanges = report.weeklySummary
+        .map((week: any) => week.weightChange)
+        .filter((change: any): change is number => change !== null && change !== undefined && isFinite(change));
+
+      console.log('Weekly changes (AnalysisReport):', weeklyChanges); // Debug log
+
+      if (weeklyChanges.length > 0) {
+        const minChange = Math.min(...weeklyChanges);
+        const maxChange = Math.max(...weeklyChanges);
+
+        // Sanity check for reasonable weight change values (should be between -10kg and +10kg per week)
+        if (Math.abs(minChange) > 10 || Math.abs(maxChange) > 10) {
+          console.warn('Unusual weight change values detected:', { minChange, maxChange });
+          // Use auto scaling if values seem unreasonable
+          weeklyWeightDomain = ['auto', 'auto'];
+        } else {
+          const absMax = Math.max(Math.abs(minChange), Math.abs(maxChange));
+          // Set symmetric range around 0 for better visualization
+          const padding = absMax * 0.2 + 0.5; // Add 20% padding plus 0.5kg minimum
+          weeklyWeightDomain = [-absMax - padding, absMax + padding];
+        }
+      }
+    }
+
     return {
         weightDomain: getDomain(weights),
         waistDomain: getDomain(waists),
+        weeklyWeightDomain,
     };
-  }, [sortedLogs]);
+  }, [sortedLogs, report]);
 
   const handleGenerateReport = async () => {
     if (!userInfo.age || !userInfo.gender || !userInfo.height) {
@@ -280,18 +345,67 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                  <ChartCard title="每周体重变化">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={report.weeklySummary} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <BarChart data={report.weeklySummary} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.2)" />
-                            <XAxis dataKey="week" stroke="rgb(156 163 175)" fontSize={12} />
-                            <YAxis stroke="rgb(156 163 175)" allowDecimals={true} width={40} label={{ value: 'kg', angle: -90, position: 'insideLeft', fill: 'rgb(156 163 175)' }} />
+                            <XAxis
+                                dataKey="week"
+                                stroke="rgb(156 163 175)"
+                                fontSize={12}
+                                tickFormatter={(value) => {
+                                    // 如果是日期范围格式，简化显示
+                                    if (typeof value === 'string' && value.includes('~')) {
+                                        const parts = value.split('~');
+                                        if (parts.length === 2) {
+                                            const startDate = parts[0].trim();
+                                            const endDate = parts[1].trim();
+                                            // 提取月日信息
+                                            const startMD = startDate.substring(5); // 去掉年份
+                                            const endMD = endDate.substring(5);
+                                            return `${startMD}~${endMD}`;
+                                        }
+                                    }
+                                    return value;
+                                }}
+                            />
+                            <YAxis
+                                stroke="rgb(156 163 175)"
+                                allowDecimals={true}
+                                width={60}
+                                domain={weeklyWeightDomain}
+                                label={{ value: 'kg', angle: -90, position: 'insideLeft', fill: 'rgb(156 163 175)' }}
+                            />
                             <Tooltip
-                                contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.9)', border: 'none', borderRadius: '0.5rem' }}
+                                contentStyle={{
+                                    backgroundColor: 'rgba(15, 23, 42, 0.98)',
+                                    border: '2px solid #22d3ee',
+                                    borderRadius: '0.75rem',
+                                    color: '#ffffff',
+                                    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+                                    fontSize: '14px',
+                                    fontWeight: '500'
+                                }}
+                                labelStyle={{
+                                    color: '#22d3ee',
+                                    fontSize: '16px',
+                                    fontWeight: 'bold'
+                                }}
                                 formatter={(value, name) => [`${Number(value).toFixed(2)} kg`, name === 'weightChange' ? '周变化' : '']}
                             />
                             <Bar dataKey="weightChange" name="周变化" radius={[4, 4, 0, 0]}>
-                                {report.weeklySummary.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.weightChange !== null && entry.weightChange <= 0 ? '#4ade80' : '#f87171'} />
-                                ))}
+                                {report.weeklySummary.map((entry, index) => {
+                                    let fillColor;
+                                    if (entry.weightChange === null || entry.weightChange === undefined) {
+                                        fillColor = '#6b7280'; // 更好看的灰色
+                                    } else if (entry.weightChange <= 0) {
+                                        fillColor = '#22d3ee'; // 青色 - 减重
+                                    } else {
+                                        fillColor = '#ef4444'; // 红色 - 增重
+                                    }
+
+                                    return (
+                                        <Cell key={`cell-${index}`} fill={fillColor} />
+                                    );
+                                })}
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
@@ -301,12 +415,27 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
                         <LineChart data={weightChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.2)" />
                             <XAxis dataKey="date" stroke="rgb(156 163 175)" fontSize={12}/>
-                            <YAxis yAxisId="left" stroke="#8884d8" domain={weightDomain} width={40} />
-                            <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" domain={waistDomain} width={40} />
-                            <Tooltip contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.9)', border: 'none', borderRadius: '0.5rem' }} />
+                            <YAxis yAxisId="left" stroke="#22d3ee" domain={weightDomain} width={40} />
+                            <YAxis yAxisId="right" orientation="right" stroke="#10b981" domain={waistDomain} width={40} />
+                            <Tooltip
+                                contentStyle={{
+                                    backgroundColor: 'rgba(15, 23, 42, 0.98)',
+                                    border: '2px solid #22d3ee',
+                                    borderRadius: '0.75rem',
+                                    color: '#ffffff',
+                                    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+                                    fontSize: '14px',
+                                    fontWeight: '500'
+                                }}
+                                labelStyle={{
+                                    color: '#22d3ee',
+                                    fontSize: '16px',
+                                    fontWeight: 'bold'
+                                }}
+                            />
                             <Legend />
-                            <Line yAxisId="left" type="monotone" dataKey="Weight" name="体重 (kg)" stroke="#8884d8" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} connectNulls />
-                            <Line yAxisId="right" type="monotone" dataKey="Waist" name="腰围 (cm)" stroke="#82ca9d" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} connectNulls />
+                            <Line yAxisId="left" type="monotone" dataKey="Weight" name="体重 (kg)" stroke="#22d3ee" strokeWidth={2} dot={{ r: 3, fill: '#22d3ee' }} activeDot={{ r: 6, fill: '#22d3ee', stroke: '#22d3ee' }} connectNulls />
+                            <Line yAxisId="right" type="monotone" dataKey="Waist" name="腰围 (cm)" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 6, fill: '#10b981', stroke: '#10b981' }} connectNulls />
                         </LineChart>
                     </ResponsiveContainer>
                 </ChartCard>
@@ -340,9 +469,11 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ logs, userInfo, 
                 
                  <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <InsightCard title="个性化运动处方" icon={<ClipboardListIcon className="w-6 h-6" />}>
-                        <p className="font-semibold">{report.exercisePrescription.recommendation}</p>
+                        <p className="font-semibold">{renderInlineMarkdown(report.exercisePrescription.recommendation)}</p>
                         <ul className="list-disc list-outside pl-5 mt-2 space-y-1">
-                          {report.exercisePrescription.details.map((detail, index) => <li key={index}>{detail}</li>)}
+                          {report.exercisePrescription.details.map((detail, index) => (
+                            <li key={index}>{renderInlineMarkdown(detail)}</li>
+                          ))}
                         </ul>
                     </InsightCard>
 
